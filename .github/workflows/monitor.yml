@@ -1,0 +1,54 @@
+name: BUH Monitor
+
+on:
+  schedule:
+    # Chạy mỗi 5 phút (giờ UTC). GitHub chỉ cho phép tối thiểu 5 phút/lần.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      test:
+        description: 'Nhập "true" để gửi 1 tin nhắn kiểm tra qua Telegram'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: buh-monitor
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run monitor
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ "${{ github.event.inputs.test }}" = "true" ]; then
+            python monitor.py --test
+          else
+            python monitor.py
+          fi
+
+      - name: Save seen state
+        run: |
+          git config user.name "buh-monitor-bot"
+          git config user.email "buh-monitor-bot@users.noreply.github.com"
+          git add seen.json
+          if git diff --cached --quiet; then
+            echo "No state change"
+          else
+            git commit -m "Update seen state"
+            git push
+          fi

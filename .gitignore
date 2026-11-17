@@ -1,0 +1,8 @@
+# Không commit token/config cá nhân lên GitHub
+config.json
+.env
+
+# File tạm, cache Python
+__pycache__/
+*.pyc
+*.tmp
