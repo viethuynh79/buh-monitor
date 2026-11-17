@@ -355,7 +355,9 @@ def main():
         sys.exit(1)
 
     # 1) Trả lời các lệnh người dùng gửi cho bot
-    if token:
+    #    (Khi đã dùng webhook Cloudflare để trả lời tức thì thì đặt SKIP_COMMANDS=1
+    #     để tránh xung đột getUpdates/webhook.)
+    if token and os.environ.get("SKIP_COMMANDS", "").strip() != "1":
         handle_commands(token, state, page1)
 
     seen = state.get("seen", {})

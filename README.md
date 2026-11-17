@@ -19,7 +19,8 @@ Nhắn cho bot (mở `@viethubnews_bot` trên Telegram):
 | `/find <từ khoá>` | Tìm từ khoá trong tiêu đề thông báo **30 ngày gần nhất**, ví dụ `/find học bổng` |
 | `/help` hoặc `/start` | Xem hướng dẫn |
 
-> Lưu ý: lệnh được xử lý sau mỗi chu kỳ quét (tối đa ~5 phút), nên bot trả lời sau vài phút.
+> ⚡ Khi gửi lệnh, bot nhắn ngay **"⏳ Đang truy thông tin..."** rồi trả kết quả trong 1–2 giây
+> (nhờ webhook Cloudflare — xem mục 5). Nếu chưa cài webhook, lệnh được xử lý sau mỗi chu kỳ quét (~5 phút).
 
 ---
 
@@ -49,7 +50,7 @@ Nhắn cho bot (mở `@viethubnews_bot` trên Telegram):
    - Chọn **Public** (bắt buộc để miễn phí chạy liên tục; repo chỉ chứa code, KHÔNG chứa token).
    - Không cần tạo README.
 3. Tải file trong thư mục này lên repo (gồm: `monitor.py`, `.github/workflows/monitor.yml`,
-   `seen.json`, `.gitignore`, `README.md`).
+   `cloudflare-worker.js`, `seen.json`, `.gitignore`, `README.md`).
 
 ### d) Thêm 2 "secret" vào repo
 1. Vào repo → tab **Settings** → **Secrets and variables** → **Actions**.
@@ -88,8 +89,8 @@ Xong! Từ giờ bot tự chạy mỗi 5 phút, máy tính tắt vẫn nhận th
   (thực tế với tin nhà trường là đủ nhanh).
 - Nếu repo không có hoạt động nào trong 60 ngày, GitHub có thể tạm dừng lịch — chỉ cần vào
   repo bấm chạy lại 1 lần là hoạt động tiếp.
-- Muốn nhận nhanh hơn 5 phút (1 phút/lần): có thể chuyển sang Cloudflare Workers — liên hệ để
-  mình hướng dẫn thêm.
+- Webhook Cloudflare (mục 5) chỉ để **trả lời lệnh tức thì**; việc **đẩy thông báo mới** vẫn do
+  GitHub Actions đảm nhiệm mỗi 5 phút.
 
 ## 4. Chạy thử trên máy (không bắt buộc)
 
@@ -106,3 +107,25 @@ python monitor.py --test
   }
   ```
   (`config.json` đã nằm trong `.gitignore`, sẽ không bị đẩy lên GitHub.)
+
+---
+
+## 5. Phản hồi TỨC THÌ cho các lệnh (Cloudflare Workers, miễn phí)
+
+GitHub chạy theo lịch nên lệnh bị trễ ~5 phút. Để bot **nhắn "Đang truy thông tin..." ngay lập tức**
+và trả kết quả trong 1–2 giây, dùng webhook Cloudflare:
+
+1. Đăng ký [dash.cloudflare.com](https://dash.cloudflare.com) (miễn phí).
+2. Vào **Workers & Pages** → **Create** → **Create Worker** → đặt tên (ví dụ `buh-bot`) → **Deploy**.
+3. Bấm **Edit code**, xoá code mẫu, dán toàn bộ nội dung file `cloudflare-worker.js` vào → **Deploy**.
+4. Vào tab **Settings** → **Variables and Secrets** → **Add** → tạo biến:
+   - Name: `BOT_TOKEN`  |  Value: token bot Telegram.
+5. Lấy URL worker của bạn, dạng: `https://buh-bot.<tên-tài-khoản>.workers.dev`
+6. Đăng ký webhook bằng cách mở trình duyệt:
+   ```
+   https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://buh-bot.<tên-tài-khoản>.workers.dev/webhook
+   ```
+   (thay `<BOT_TOKEN>` và đúng URL worker của bạn). Trang trả về `{"ok":true}` là thành công.
+
+Xong! Từ giờ gửi `/full7d`, `/full30d`, `/find ...` là bot phản hồi ngay.
+GitHub Actions vẫn chạy song song để **đẩy thông báo mới** như bình thường.
