@@ -205,6 +205,11 @@ def telegram_get_updates(token, offset):
         if data.get("ok"):
             return data.get("result", [])
         log("getUpdates lỗi: {}".format(data.get("description")))
+    except urllib.error.HTTPError as e:
+        if e.code == 409:
+            # webhook Cloudflare đang hoạt động -> lệnh do webhook xử lý, bỏ qua
+            return []
+        log("Lỗi getUpdates: {}".format(e))
     except Exception as e:  # noqa: BLE001
         log("Lỗi getUpdates: {}".format(e))
     return []

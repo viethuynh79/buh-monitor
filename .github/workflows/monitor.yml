@@ -34,7 +34,6 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          SKIP_COMMANDS: '1'
         run: |
           if [ "${{ github.event.inputs.test }}" = "true" ]; then
             python monitor.py --test
