@@ -19,6 +19,7 @@ const VN_OFFSET = 7 * 3600 * 1000;
 const HELP = [
   "🤖 Bot thông báo ĐH Ngân Hàng",
   "Các lệnh:",
+  "/update — thông báo mới nhất (real-time)",
   "/full7d — thông báo 7 ngày gần nhất",
   "/full30d — thông báo 30 ngày gần nhất",
   "/find <từ khoá> — tìm từ khoá trong 30 ngày",
@@ -92,6 +93,11 @@ function parseItems(html) {
     }
   }
   return items;
+}
+
+async function latestItems() {
+  const html = await fetchHTML(HOME);
+  return parseItems(html);
 }
 
 async function collectRecent(days) {
@@ -176,8 +182,11 @@ async function processUpdate(update, env) {
   let days = null;
   let keyword = null;
   let kwRaw = null;
+  let latestOnly = false;
 
-  if (text.startsWith("/full7d")) {
+  if (text.startsWith("/update")) {
+    latestOnly = true;
+  } else if (text.startsWith("/full7d")) {
     days = 7;
   } else if (text.startsWith("/full30d")) {
     days = 30;
@@ -198,15 +207,20 @@ async function processUpdate(update, env) {
   await sendMessage(env, chatId, "⏳ Đang truy thông tin từ online.hub.edu.vn, vui lòng chờ giây lát...");
 
   try {
-    const items = await collectRecent(days);
     let replies;
-    if (keyword) {
-      const found = items.filter((it) => it.title.toLowerCase().includes(keyword));
-      replies = formatList('🔎 TÌM "' + kwRaw + '" TRONG 30 NGÀY', found);
-    } else if (days === 7) {
-      replies = formatList("📋 THÔNG BÁO 7 NGÀY GẦN NHẤT", items);
+    if (latestOnly) {
+      const items = await latestItems();
+      replies = formatList("📋 THÔNG BÁO MỚI NHẤT", items);
     } else {
-      replies = formatList("📋 THÔNG BÁO 30 NGÀY GẦN NHẤT", items);
+      const items = await collectRecent(days);
+      if (keyword) {
+        const found = items.filter((it) => it.title.toLowerCase().includes(keyword));
+        replies = formatList('🔎 TÌM "' + kwRaw + '" TRONG 30 NGÀY', found);
+      } else if (days === 7) {
+        replies = formatList("📋 THÔNG BÁO 7 NGÀY GẦN NHẤT", items);
+      } else {
+        replies = formatList("📋 THÔNG BÁO 30 NGÀY GẦN NHẤT", items);
+      }
     }
     for (const r of replies) {
       await sendMessage(env, chatId, r);
@@ -238,4 +252,4 @@ export default {
   },
 };
 
-export { parseItems, collectRecent, formatList };
+export { parseItems, collectRecent, formatList, latestItems };

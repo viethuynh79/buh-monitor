@@ -63,6 +63,7 @@ TELEGRAM_CHUNK = 3800  # mỗi tin nhắn Telegram tối đa 4096 ký tự
 HELP_TEXT = (
     "🤖 Bot thông báo ĐH Ngân Hàng\n"
     "Các lệnh:\n"
+    "/update — thông báo mới nhất (real-time)\n"
     "/full7d — thông báo 7 ngày gần nhất\n"
     "/full30d — thông báo 30 ngày gần nhất\n"
     "/find <từ khoá> — tìm từ khoá trong 30 ngày gần nhất\n"
@@ -248,6 +249,10 @@ def build_reply(text, first_html):
     t = (text or "").strip()
     if t in ("/start", "/help"):
         return [HELP_TEXT]
+    if t.startswith("/update"):
+        items = parse_items(first_html)
+        return format_announcement_list(
+            "\U0001F4CB THÔNG BÁO MỚI NHẤT", items)
     if t.startswith("/full7d"):
         items = collect_recent(7, first_html)
         return format_announcement_list(

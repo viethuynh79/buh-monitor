@@ -14,6 +14,7 @@ Nhắn cho bot (mở `@viethubnews_bot` trên Telegram):
 
 | Lệnh | Tác dụng |
 |---|---|
+| `/update` | Xem **thông báo mới nhất** ngay lập tức (real-time, kèm link) |
 | `/full7d` | Xem danh sách thông báo **7 ngày gần nhất** (kèm link) |
 | `/full30d` | Xem danh sách thông báo **30 ngày gần nhất** (kèm link) |
 | `/find <từ khoá>` | Tìm từ khoá trong tiêu đề thông báo **30 ngày gần nhất**, ví dụ `/find học bổng` |
