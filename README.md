@@ -8,6 +8,21 @@ và gửi tin nhắn **Telegram** ngay khi trường đăng thông báo/tin tứ
 
 ---
 
+## Các lệnh Telegram
+
+Nhắn cho bot (mở `@viethubnews_bot` trên Telegram):
+
+| Lệnh | Tác dụng |
+|---|---|
+| `/full7d` | Xem danh sách thông báo **7 ngày gần nhất** (kèm link) |
+| `/full30d` | Xem danh sách thông báo **30 ngày gần nhất** (kèm link) |
+| `/find <từ khoá>` | Tìm từ khoá trong tiêu đề thông báo **30 ngày gần nhất**, ví dụ `/find học bổng` |
+| `/help` hoặc `/start` | Xem hướng dẫn |
+
+> Lưu ý: lệnh được xử lý sau mỗi chu kỳ quét (tối đa ~5 phút), nên bot trả lời sau vài phút.
+
+---
+
 ## 1. Chuẩn bị (làm 1 lần, khoảng 10 phút)
 
 ### a) Tạo bot Telegram, lấy `BOT_TOKEN`
