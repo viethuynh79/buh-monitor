@@ -36,6 +36,9 @@ const ONLINE_HOME = "https://online.hub.edu.vn/";
 const ONLINE_GRID_TARGET = "ctl00$ContentPlaceHolder1$ctl00$ctl00$ctl00$ctl00$grvNewsgroup";
 const ONLINE_ITEM_RE = /title="Messages\.aspx\?ID=(\d+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<span[^>]*class="inputdate"[^>]*>(\d{1,2}\/\d{1,2}\/\d{4})<\/span>/g;
 const FB_HTTTQL_URL = "https://www.facebook.com/htttql.hub";
+const AUTHOR_NAME = "Huynh Viet";
+const AUTHOR_FB_URL = "https://www.facebook.com/profile.php?id=61591547874181";
+const REPO_URL = "https://github.com/viethuynh79/buh-monitor";
 
 const SOURCES = [
   {
@@ -192,6 +195,7 @@ const BOT_COMMANDS = [
   { command: "portals", description: "🔗 Mở nhanh LMS, ĐKTC, eStudent, Fanpage MIS" },
   { command: "status",  description: "📊 Kiểm tra trạng thái 7 cổng HUB (real-time)" },
   { command: "clear",   description: "🧹 Xoá lịch sử trò chuyện gần đây" },
+  { command: "author",  description: "👨‍💻 Thông tin tác giả Huynh Viet & Liên hệ" },
   { command: "help",    description: "❓ Hướng dẫn sử dụng Bot HUB Pro" },
 ];
 
@@ -884,6 +888,7 @@ function mainMenuView() {
     "━━━━━━━━━━━━━━━━━━━━",
     `🟢 <b>Trạng thái BOT:</b> Đang hoạt động · <code>${vnNowLabel()}</code>`,
     "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram",
+    `👨‍💻 <b>Author:</b> <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a> <i>(MIS · HUB)</i>`,
     "",
     "👇 <i>Vui lòng chọn menu bên dưới:</i>",
   ].join("\n");
@@ -913,8 +918,34 @@ function mainMenuView() {
       ],
       [
         { text: "❓ Hướng dẫn", callback_data: "m:help" },
-        { text: "🧹 Dọn chat", callback_data: "clear:ask" },
+        { text: "👨‍💻 Tác giả", callback_data: "m:author" },
       ],
+      [{ text: "🧹 Dọn sạch lịch sử trò chuyện (/clear)", callback_data: "clear:ask" }],
+    ],
+  };
+  return { text, markup };
+}
+
+function authorView() {
+  const text = [
+    "👨‍💻 <b>THÔNG TIN TÁC GIẢ — HUB MONITOR PRO</b>",
+    "━━━━━━━━━━━━━━━━━━━━",
+    `👤 <b>Author:</b> <b>${AUTHOR_NAME}</b>`,
+    "🎓 <b>Đơn vị:</b> Sinh viên Khoa <b>Hệ thống Thông tin Quản lý (HTTTQL / MIS)</b> — Trường ĐH Ngân hàng TP.HCM (HUB)",
+    "🤖 <b>Dự án:</b> <b>HUB Monitor Pro v2.0</b> — Hệ thống tự động cập nhật &amp; tra cứu thông báo toàn trường HUB",
+    "🛠️ <b>Công nghệ:</b> Telegram Bot API · Cloudflare Workers · GitHub Actions",
+    "",
+    "💬 <i>Cần góp ý tính năng mới, báo lỗi hoặc kết nối giao lưu, bấm nút Facebook bên dưới để liên hệ mình nhé!</i>",
+  ].join("\n");
+
+  const markup = {
+    inline_keyboard: [
+      [{ text: `📘 Facebook Author — ${AUTHOR_NAME}`, url: AUTHOR_FB_URL }],
+      [
+        { text: "🐙 Mã nguồn GitHub", url: REPO_URL },
+        { text: "💻 Khoa HTTTQL (MIS)", callback_data: "m:mis" },
+      ],
+      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
   };
   return { text, markup };
@@ -1097,18 +1128,21 @@ function helpView() {
     "• <code>/portals</code> — Mở nhanh LMS, ĐKTC, eStudent...",
     "• <code>/status</code> — Kiểm tra tốc độ &amp; tình trạng 7 cổng HUB",
     "• <code>/clear</code> — Xoá lịch sử trò chuyện gần đây (VD: <code>/clear 200</code>)",
+    "• <code>/author</code> — Thông tin tác giả Huynh Viet &amp; liên hệ",
     "",
     "💡 <b>3. Mẹo dùng cực xịn:</b>",
     "• Nhắn thẳng từ khoá bất kỳ (VD: <code>lịch thi</code>) để tìm ngay!",
     "• Bấm các nút số <b>📖 1–5</b> dưới mỗi danh sách để đọc chi tiết &amp; tải PDF ngay trong Telegram!",
     "• Gõ <code>@viethubnews_bot lịch thi</code> trong bất kỳ nhóm lớp nào để chia sẻ thông báo chính thức (nếu đã bật Inline Mode trong BotFather).",
+    "",
+    `👨‍💻 <i>Phát triển bởi <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a> · Sinh viên Khoa HTTTQL (MIS) — HUB</i>`,
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
       [
         { text: "🔥 Xem tin mới nhất", callback_data: "list:all:latest:1" },
-        { text: "💻 Khoa HTTTQL", callback_data: "m:mis" },
+        { text: "👨‍💻 Về tác giả", callback_data: "m:author" },
       ],
       [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
@@ -1383,6 +1417,7 @@ async function renderRoute(routeStr, bypassCache = false) {
   if (routeStr === "m:topics") return topicsMenuView();
   if (routeStr === "m:search") return searchMenuView();
   if (routeStr === "m:links") return quickLinksView();
+  if (routeStr === "m:author") return authorView();
   if (routeStr === "m:help") return helpView();
 
   if (routeStr === "status") {
@@ -1528,6 +1563,11 @@ async function handleMessage(msg, env) {
   }
   if (cmd === "/portals" || cmd === "/links") {
     const v = quickLinksView();
+    await sendMsg(env, chatId, v.text, v.markup);
+    return;
+  }
+  if (cmd === "/author" || cmd === "/about") {
+    const v = authorView();
     await sendMsg(env, chatId, v.text, v.markup);
     return;
   }

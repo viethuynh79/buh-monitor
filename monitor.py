@@ -66,6 +66,9 @@ ONLINE_ITEM_RE = re.compile(
 )
 
 FB_HTTTQL_URL = "https://www.facebook.com/htttql.hub"
+AUTHOR_NAME = "Huynh Viet"
+AUTHOR_FB_URL = "https://www.facebook.com/profile.php?id=61591547874181"
+REPO_URL = "https://github.com/viethuynh79/buh-monitor"
 
 # Cấu hình toàn bộ nguồn thông báo thuộc hệ sinh thái HUB
 # Priority thấp hơn = được ưu tiên làm link chính khi trùng bài giữa nhiều cổng
@@ -199,6 +202,7 @@ BOT_COMMANDS = [
     {"command": "portals", "description": "🔗 Mở nhanh LMS, ĐKTC, eStudent, Fanpage MIS"},
     {"command": "status", "description": "📊 Kiểm tra trạng thái 7 cổng HUB (real-time)"},
     {"command": "clear", "description": "🧹 Xoá lịch sử trò chuyện gần đây"},
+    {"command": "author", "description": "👨‍💻 Thông tin tác giả Huynh Viet & Liên hệ"},
     {"command": "help", "description": "❓ Hướng dẫn sử dụng Bot HUB Pro"},
 ]
 
@@ -805,8 +809,9 @@ def build_main_menu_markup():
             ],
             [
                 {"text": "❓ Hướng dẫn", "callback_data": "m:help"},
-                {"text": "🧹 Dọn chat", "callback_data": "clear:ask"},
+                {"text": "👨‍💻 Tác giả", "callback_data": "m:author"},
             ],
+            [{"text": "🧹 Dọn sạch lịch sử trò chuyện (/clear)", "callback_data": "clear:ask"}],
         ]
     }
 
@@ -818,9 +823,10 @@ def build_main_menu_text():
         "🎓 <i>Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🟢 <b>Trạng thái BOT:</b> Đang hoạt động · <code>{}</code>\n"
-        "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram\n\n"
+        "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram\n"
+        "👨‍💻 <b>Author:</b> <a href=\"{}\">{}</a> <i>(MIS · HUB)</i>\n\n"
         "👇 <i>Vui lòng chọn menu bên dưới:</i>"
-    ).format(now_vn)
+    ).format(now_vn, AUTHOR_FB_URL, AUTHOR_NAME)
 
 
 def build_notification_card(item, extra_sources=None, detail=None, is_test=False):
@@ -1102,6 +1108,21 @@ def handle_commands(token, state, results_by_source):
                 its = [it for it in all_items if classify_item(it["title"], it["source"])["key"] == "scholar"]
                 for chunk in format_list_html("🏆 HỌC BỔNG & KHEN THƯỞNG", its[:15]):
                     telegram_send(token, cid, chunk)
+            elif cmd in ("/author", "/about"):
+                telegram_send(
+                    token, cid,
+                    (
+                        "👨‍💻 <b>THÔNG TIN TÁC GIẢ — HUB MONITOR PRO</b>\n"
+                        "━━━━━━━━━━━━━━━━━━━━\n"
+                        "👤 <b>Author:</b> <b>{}</b>\n"
+                        "🎓 <b>Đơn vị:</b> Sinh viên Khoa <b>Hệ thống Thông tin Quản lý (HTTTQL / MIS)</b> — ĐH Ngân hàng TP.HCM (HUB)\n"
+                        "🤖 <b>Dự án:</b> <b>HUB Monitor Pro v2.0</b>"
+                    ).format(AUTHOR_NAME),
+                    reply_markup={"inline_keyboard": [
+                        [{"text": "📘 Facebook Author — {}".format(AUTHOR_NAME), "url": AUTHOR_FB_URL}],
+                        [{"text": "🐙 Mã nguồn GitHub", "url": REPO_URL}, {"text": "📌 Menu chính", "callback_data": "m:home"}],
+                    ]},
+                )
             elif cmd == "/clear":
                 mid = msg.get("message_id")
                 if mid:

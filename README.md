@@ -78,6 +78,7 @@ Bot Telegram thế hệ mới tự động quét **toàn bộ hệ sinh thái th
 | `/portals` | 🔗 Mở nhanh LMS, Đăng ký tín chỉ, eStudent, Thư viện, Fanpage MIS |
 | `/status` | 📊 Kiểm tra tình trạng hoạt động & độ trễ 7 cổng HUB (real-time) |
 | `/clear [số tin]` | 🧹 Xoá lịch sử trò chuyện gần đây (mặc định 100 tin, tối đa 300 tin trong vòng 48h) |
+| `/author` | 👨‍💻 Thông tin tác giả **Huynh Viet** & liên hệ Facebook |
 | `/help` | ❓ Xem hướng dẫn chi tiết |
 
 ---
@@ -127,3 +128,11 @@ python monitor.py --dry-run    # Quét thử tất cả 9 nguồn HUB (không g�
 python monitor.py --setup-bot  # Cài đặt nút Menu xanh & danh sách lệnh
 python monitor.py --test       # Gửi thẻ demo + Menu tương tác về Telegram
 ```
+
+---
+
+## 👨‍💻 Tác giả
+
+- **Author:** [Huynh Viet](https://www.facebook.com/profile.php?id=61591547874181)
+- **Khoa:** Hệ thống Thông tin Quản lý (HTTTQL / MIS) — Trường Đại học Ngân hàng TP.HCM (HUB)
+- **GitHub:** [viethuynh79/buh-monitor](https://github.com/viethuynh79/buh-monitor)
