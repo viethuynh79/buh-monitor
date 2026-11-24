@@ -77,6 +77,7 @@ Bot Telegram thế hệ mới tự động quét **toàn bộ hệ sinh thái th
 | `/digest` | 📰 Bản tin tổng hợp tuần/tháng nhóm theo chủ đề |
 | `/portals` | 🔗 Mở nhanh LMS, Đăng ký tín chỉ, eStudent, Thư viện, Fanpage MIS |
 | `/status` | 📊 Kiểm tra tình trạng hoạt động & độ trễ 7 cổng HUB (real-time) |
+| `/clear [số tin]` | 🧹 Xoá lịch sử trò chuyện gần đây (mặc định 100 tin, tối đa 300 tin trong vòng 48h) |
 | `/help` | ❓ Xem hướng dẫn chi tiết |
 
 ---

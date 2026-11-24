@@ -55,7 +55,7 @@ USER_AGENT = (
 )
 
 VN_TZ = datetime.timezone(datetime.timedelta(hours=7))
-BOT_UI_VERSION = 2
+BOT_UI_VERSION = 3
 
 ONLINE_HOME = "https://online.hub.edu.vn/"
 ONLINE_GRID_TARGET = "ctl00$ContentPlaceHolder1$ctl00$ctl00$ctl00$ctl00$grvNewsgroup"
@@ -198,6 +198,7 @@ BOT_COMMANDS = [
     {"command": "digest", "description": "📰 Bản tin tổng hợp tuần theo chủ đề"},
     {"command": "portals", "description": "🔗 Mở nhanh LMS, ĐKTC, eStudent, Fanpage MIS"},
     {"command": "status", "description": "📊 Kiểm tra trạng thái 7 cổng HUB (real-time)"},
+    {"command": "clear", "description": "🧹 Xoá lịch sử trò chuyện gần đây"},
     {"command": "help", "description": "❓ Hướng dẫn sử dụng Bot HUB Pro"},
 ]
 
@@ -802,7 +803,10 @@ def build_main_menu_markup():
                 {"text": "🔗 Cổng tiện ích SV", "callback_data": "m:links"},
                 {"text": "📊 Trạng thái HUB", "callback_data": "status"},
             ],
-            [{"text": "❓ Hướng dẫn & Lệnh nhanh", "callback_data": "m:help"}],
+            [
+                {"text": "❓ Hướng dẫn", "callback_data": "m:help"},
+                {"text": "🧹 Dọn chat", "callback_data": "clear:ask"},
+            ],
         ]
     }
 
@@ -812,8 +816,7 @@ def build_main_menu_text():
         "📌 <b>BẢNG ĐIỀU KHIỂN — HUB MONITOR PRO</b>\n"
         "🎓 <i>Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "🟢 <b>Auto-Monitor:</b> Quét 7 cổng HUB mỗi 5 phút\n"
-        "🔔 Tự động gửi tin mới kèm PDF &amp; cảnh báo hạn chót\n\n"
+        "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram\n\n"
         "👇 <i>Vui lòng chọn menu bên dưới:</i>"
     )
 
@@ -1097,6 +1100,18 @@ def handle_commands(token, state, results_by_source):
                 its = [it for it in all_items if classify_item(it["title"], it["source"])["key"] == "scholar"]
                 for chunk in format_list_html("🏆 HỌC BỔNG & KHEN THƯỞNG", its[:15]):
                     telegram_send(token, cid, chunk)
+            elif cmd == "/clear":
+                mid = msg.get("message_id")
+                if mid:
+                    cnt = min(max(10, int(arg) if arg.isdigit() else 100), 300)
+                    all_ids = list(range(mid, max(0, mid - cnt), -1))
+                    for i in range(0, len(all_ids), 100):
+                        telegram_api_call(token, "deleteMessages", {"chat_id": cid, "message_ids": all_ids[i:i + 100]})
+                telegram_send(
+                    token, cid,
+                    "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>",
+                    reply_markup={"inline_keyboard": [[{"text": "📌 Mở Menu", "callback_data": "m:home"}, {"text": "🗑️ Ẩn tin này", "callback_data": "del:self"}]]},
+                )
             elif cmd == "/find" or not cmd:
                 kw = arg.strip()
                 if not kw:

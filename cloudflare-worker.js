@@ -191,6 +191,7 @@ const BOT_COMMANDS = [
   { command: "digest",  description: "📰 Bản tin tổng hợp tuần theo chủ đề" },
   { command: "portals", description: "🔗 Mở nhanh LMS, ĐKTC, eStudent, Fanpage MIS" },
   { command: "status",  description: "📊 Kiểm tra trạng thái 7 cổng HUB (real-time)" },
+  { command: "clear",   description: "🧹 Xoá lịch sử trò chuyện gần đây" },
   { command: "help",    description: "❓ Hướng dẫn sử dụng Bot HUB Pro" },
 ];
 
@@ -853,6 +854,27 @@ async function answerCb(env, callbackQueryId, text = "", showAlert = false) {
   });
 }
 
+async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
+  const safeCount = Math.min(Math.max(10, count || 100), 300);
+  const startId = Math.max(1, upToMsgId - safeCount + 1);
+  const allIds = [];
+  for (let id = upToMsgId; id >= startId; id--) {
+    allIds.push(id);
+  }
+  const batches = [];
+  for (let i = 0; i < allIds.length; i += 100) {
+    batches.push(allIds.slice(i, i + 100));
+  }
+  await Promise.all(
+    batches.map((ids) =>
+      tgApi(env, "deleteMessages", {
+        chat_id: chatId,
+        message_ids: ids,
+      })
+    )
+  );
+}
+
 // ---------------------------------------------------------------- Views & Keyboards
 
 function mainMenuView() {
@@ -860,7 +882,6 @@ function mainMenuView() {
     "📌 <b>BẢNG ĐIỀU KHIỂN — HUB MONITOR PRO</b>",
     "🎓 <i>Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)</i>",
     "━━━━━━━━━━━━━━━━━━━━",
-    "🟢 <b>Auto-Monitor:</b> Quét 7 cổng HUB mỗi 5 phút",
     "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram",
     "",
     "👇 <i>Vui lòng chọn menu bên dưới:</i>",
@@ -889,7 +910,10 @@ function mainMenuView() {
         { text: "🔗 Cổng tiện ích SV", callback_data: "m:links" },
         { text: "📊 Trạng thái HUB", callback_data: "status" },
       ],
-      [{ text: "❓ Hướng dẫn & Lệnh nhanh", callback_data: "m:help" }],
+      [
+        { text: "❓ Hướng dẫn", callback_data: "m:help" },
+        { text: "🧹 Dọn chat", callback_data: "clear:ask" },
+      ],
     ],
   };
   return { text, markup };
@@ -1071,6 +1095,7 @@ function helpView() {
     "• <code>/digest</code> — Bản tin tổng hợp tuần theo chủ đề",
     "• <code>/portals</code> — Mở nhanh LMS, ĐKTC, eStudent...",
     "• <code>/status</code> — Kiểm tra tốc độ &amp; tình trạng 7 cổng HUB",
+    "• <code>/clear</code> — Xoá lịch sử trò chuyện gần đây (VD: <code>/clear 200</code>)",
     "",
     "💡 <b>3. Mẹo dùng cực xịn:</b>",
     "• Nhắn thẳng từ khoá bất kỳ (VD: <code>lịch thi</code>) để tìm ngay!",
@@ -1505,6 +1530,22 @@ async function handleMessage(msg, env) {
     await sendMsg(env, chatId, v.text, v.markup);
     return;
   }
+  if (cmd === "/clear") {
+    const reqCount = parseInt(arg, 10) || 100;
+    await clearChatHistory(env, chatId, msg.message_id, reqCount);
+    await sendMsg(
+      env,
+      chatId,
+      "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>\n<i>(Lưu ý: Telegram chỉ cho phép bot xoá tin nhắn trong vòng 48 giờ)</i>",
+      {
+        inline_keyboard: [[
+          { text: "📌 Mở Menu", callback_data: "m:home" },
+          { text: "🗑️ Ẩn tin này", callback_data: "del:self" },
+        ]],
+      }
+    );
+    return;
+  }
 
   // Xác định route cần tải dữ liệu live
   let route = null;
@@ -1592,6 +1633,56 @@ async function handleCallback(cb, env) {
 
   if (data === "noop") {
     await answerCb(env, cb.id, "Dùng nút Trước / Sau để chuyển trang");
+    return;
+  }
+
+  if (data === "del:self") {
+    await answerCb(env, cb.id, "Đã ẩn");
+    if (chatId && messageId) {
+      await tgApi(env, "deleteMessage", { chat_id: chatId, message_id: messageId });
+    }
+    return;
+  }
+
+  if (data === "clear:ask") {
+    await answerCb(env, cb.id);
+    if (chatId && messageId) {
+      await editMsg(
+        env,
+        chatId,
+        messageId,
+        "🧹 <b>XÁC NHẬN DỌN LỊCH SỬ TRÒ CHUYỆN</b>\n━━━━━━━━━━━━━━━━━━━━\nBot sẽ xoá các tin nhắn gần đây (trong vòng 48 giờ theo quy định của Telegram).\n\n<i>Bạn muốn dọn bao nhiêu tin gần nhất?</i>",
+        {
+          inline_keyboard: [
+            [
+              { text: "🧹 Xoá 100 tin gần nhất", callback_data: "clear:run:100" },
+              { text: "🔥 Xoá tối đa (300 tin)", callback_data: "clear:run:300" },
+            ],
+            [{ text: "⬅️ Huỷ & Quay lại Menu", callback_data: "m:home" }],
+          ],
+        }
+      );
+    }
+    return;
+  }
+
+  if (data.startsWith("clear:run:")) {
+    const count = parseInt(data.split(":")[2], 10) || 100;
+    await answerCb(env, cb.id, "🧹 Đang dọn sạch chat...");
+    if (chatId && messageId) {
+      await clearChatHistory(env, chatId, messageId, count);
+      await sendMsg(
+        env,
+        chatId,
+        "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>\n<i>(Lưu ý: Telegram chỉ cho phép bot xoá tin nhắn trong vòng 48 giờ)</i>",
+        {
+          inline_keyboard: [[
+            { text: "📌 Mở Menu", callback_data: "m:home" },
+            { text: "🗑️ Ẩn tin này", callback_data: "del:self" },
+          ]],
+        }
+      );
+    }
     return;
   }
 
