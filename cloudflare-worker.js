@@ -1083,7 +1083,7 @@ function authorView() {
       [{ text: `📘 Facebook Author — ${AUTHOR_NAME}`, url: AUTHOR_FB_URL }],
       [
         { text: "💻 Khoa HTTTQL (MIS)", callback_data: "m:mis" },
-        { text: "📘 Fanpage Khoa MIS", callback_data: "src:fb_htttql:1" },
+        { text: "📘 Fanpage Khoa MIS", url: FB_HTTTQL_URL },
       ],
       [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
@@ -1096,7 +1096,7 @@ function misHubView() {
     "💻 <b>KHOA HỆ THỐNG THÔNG TIN QUẢN LÝ (MIS — HUB)</b>",
     "━━━━━━━━━━━━━━━━━━━━",
     "🎯 <b>Không gian dành riêng cho sinh viên HTTTQL:</b>",
-    "• 📘 Theo dõi <b>từng bài viết mới nhất trên Fanpage Khoa HTTTQL</b> (tính như thông báo chính thức!)",
+    "• 📘 Mở nhanh <b>bài viết mới nhất trên Fanpage Khoa HTTTQL</b>",
     "• 📢 Tự động theo dõi <b>Thông báo &amp; Sự kiện Website Khoa HTTTQL</b>",
     "• 🌟 <b>Radar MIS:</b> Gom mọi tin liên quan HTTTQL, CNTT, Đồ án, TMĐT, AI từ toàn trường HUB",
     "",
@@ -1105,15 +1105,15 @@ function misHubView() {
 
   const markup = {
     inline_keyboard: [
-      [{ text: "📘 Bài viết mới nhất Fanpage Khoa HTTTQL", callback_data: "src:fb_htttql:1" }],
+      [{ text: "📘 Bài viết mới nhất Fanpage Khoa HTTTQL", url: FB_HTTTQL_URL }],
       [
         { text: "📢 Thông báo Web Khoa", callback_data: "src:htttql:1" },
         { text: "🚀 Sự kiện & Tọa đàm MIS", callback_data: "src:htttql_ev:1" },
       ],
       [{ text: "🌟 Radar tin MIS trên toàn trường HUB", callback_data: "mis:radar:1" }],
       [
-        { text: "🔗 Mở Facebook Khoa MIS", url: FB_HTTTQL_URL },
         { text: "🌐 Website Khoa HTTTQL", url: "https://khoahtttql.hub.edu.vn/" },
+        { text: "🎓 Sinh viên Khoa MIS", url: "https://khoahtttql.hub.edu.vn/sinh-vien" },
       ],
       [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
@@ -1134,7 +1134,7 @@ function portalsMenuView() {
     inline_keyboard: [
       [{ text: "🔥 Xem gộp TẤT CẢ các cổng HUB", callback_data: "list:all:latest:1" }],
       [
-        { text: "📘 Fanpage Khoa MIS (FB)", callback_data: "src:fb_htttql:1" },
+        { text: "📘 Fanpage Khoa MIS (FB)", url: FB_HTTTQL_URL },
         { text: "💻 Web Khoa HTTTQL", callback_data: "src:htttql:1" },
       ],
       [
@@ -1607,20 +1607,15 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
     if (skey === "fb_htttql" && !(env && (env.FB_HTTTQL_RSS_URL || env.FB_ACCESS_TOKEN))) {
       return {
         text: [
-          "📘 <b>FANPAGE KHOA HTTTQL — CHƯA KẾT NỐI NGUỒN BÀI VIẾT</b>",
+          "📘 <b>FANPAGE KHOA HỆ THỐNG THÔNG TIN QUẢN LÝ (MIS — HUB)</b>",
           "━━━━━━━━━━━━━━━━━━━━",
-          "Facebook chặn máy chủ đọc bài viết trực tiếp nếu không có nguồn RSS hoặc Graph API.",
-          "",
-          "⚡ <b>Kích hoạt tự động nhận từng bài viết mới của Fanpage Khoa HTTTQL (30 giây):</b>",
-          "1. Tạo link RSS miễn phí cho <code>https://www.facebook.com/htttql.hub</code> tại <b>rss.app</b> (hoặc dùng Meta Page Access Token).",
-          "2. Thêm biến <code>FB_HTTTQL_RSS_URL</code> vào <b>Cloudflare Worker</b> &amp; <b>GitHub Secrets</b>.",
-          "3. Ngay lập tức mọi bài đăng mới trên Fanpage sẽ tự động xuất hiện như thông báo chính thức &amp; auto-push về Telegram!",
+          "👇 <i>Bấm nút bên dưới để xem bài viết mới nhất trực tiếp trên Fanpage Khoa:</i>",
         ].join("\n"),
         markup: {
           inline_keyboard: [
-            [{ text: "📘 Mở trực tiếp Fanpage Khoa HTTTQL", url: FB_HTTTQL_URL }],
+            [{ text: "📘 Mở Fanpage Khoa HTTTQL", url: FB_HTTTQL_URL }],
             [
-              { text: "📢 Xem Web Khoa HTTTQL", callback_data: "src:htttql:1" },
+              { text: "📢 Thông báo Web Khoa", callback_data: "src:htttql:1" },
               { text: "⬅️ Không gian MIS", callback_data: "m:mis" },
             ],
             [{ text: "📌 Quay lại Menu chính", callback_data: "m:home" }],
@@ -1633,7 +1628,7 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
     const siblingMap = {
       daotao: { cb: "src:daotao_news:1", label: "📰 Xem Tin tức & Thực tập — Đào tạo" },
       daotao_news: { cb: "src:daotao:1", label: "🎓 Xem Thông báo — Phòng Đào tạo" },
-      htttql: { cb: "src:fb_htttql:1", label: "📘 Xem Bài viết Fanpage Khoa HTTTQL" },
+      htttql: { cb: "src:htttql_ev:1", label: "🚀 Xem Sự kiện & Tọa đàm MIS" },
       htttql_ev: { cb: "src:htttql:1", label: "📢 Xem Thông báo Web Khoa HTTTQL" },
       fb_htttql: { cb: "src:htttql:1", label: "📢 Xem Thông báo Web Khoa HTTTQL" },
     };
