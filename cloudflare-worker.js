@@ -38,7 +38,6 @@ const ONLINE_ITEM_RE = /title="Messages\.aspx\?ID=(\d+)"[^>]*>([\s\S]*?)<\/a>[\s
 const FB_HTTTQL_URL = "https://www.facebook.com/htttql.hub";
 const AUTHOR_NAME = "Huynh Viet";
 const AUTHOR_FB_URL = "https://www.facebook.com/profile.php?id=61591547874181";
-const REPO_URL = "https://github.com/viethuynh79/buh-monitor";
 
 const SOURCES = [
   {
@@ -152,6 +151,19 @@ const SOURCES = [
 ];
 
 const SOURCE_BY_KEY = Object.fromEntries(SOURCES.map((s) => [s.key, s]));
+const FB_SOURCE = {
+  key: "fb_htttql",
+  code: "fb",
+  name: "Fanpage Khoa HTTTQL (FB)",
+  short: "Fanpage MIS",
+  emoji: "📘",
+  type: "fb_feed",
+  url: FB_HTTTQL_URL,
+  base: "https://www.facebook.com",
+  section: "",
+  priority: 0,
+};
+SOURCE_BY_KEY.fb_htttql = FB_SOURCE;
 
 // Ánh xạ mã ngắn -> cấu hình giải mã bài viết chi tiết (giữ callback_data < 64 bytes)
 const DETAIL_ROUTES = {
@@ -582,12 +594,108 @@ async function fetchSource(src, onlinePages = 1) {
   }
 }
 
-async function fetchAllSources(onlinePages = 1, bypassCache = false) {
-  const key = `all_sources_p${onlinePages}`;
+function parseFbFeedPayload(rawText) {
+  const trimmed = String(rawText || "").trim();
+  const items = [];
+  const seen = new Set();
+  const pushPost = (id, title, body, link, dateObj) => {
+    const cleanT = cleanText(title || body || "").slice(0, 220);
+    if (!cleanT) return;
+    const d = dateObj && !isNaN(dateObj.getTime()) ? dateObj : vnToday();
+    const vnD = new Date(d.getTime() + VN_OFFSET);
+    const utcDay = new Date(Date.UTC(vnD.getUTCFullYear(), vnD.getUTCMonth(), vnD.getUTCDate()));
+    const safeId = String(id || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(-24) || extractDnnId(link + cleanT);
+    if (seen.has(safeId)) return;
+    seen.add(safeId);
+    items.push({
+      id: safeId,
+      source: "fb_htttql",
+      code: "fb",
+      title: cleanT,
+      fullText: cleanText(body || title || "").slice(0, 1400),
+      date: fmtDate(utcDay),
+      ts: utcDay.getTime(),
+      url: link || FB_HTTTQL_URL,
+    });
+  };
+
+  // JSON Feed (rss.app JSON / Meta Graph API JSON)
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const obj = JSON.parse(trimmed);
+      const arr = Array.isArray(obj) ? obj : (obj.items || obj.data || []);
+      for (const it of arr) {
+        const msg = it.message || it.content_text || it.summary || it.description || it.title || "";
+        const title = it.title || msg.split(/\r?\n/)[0] || msg;
+        const link = it.permalink_url || it.url || it.link || FB_HTTTQL_URL;
+        const dtStr = it.created_time || it.date_published || it.date_modified || it.pubDate || "";
+        pushPost(it.id || link, title, msg, link, dtStr ? new Date(dtStr) : null);
+      }
+      return items.sort((a, b) => b.ts - a.ts);
+    } catch (_) {}
+  }
+
+  // RSS 2.0 <item> or Atom <entry>
+  const stripCdata = (s) => String(s || "").replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/i, "$1").trim();
+  const tagVal = (block, tag) => {
+    const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+    return m ? stripCdata(m[1]) : "";
+  };
+
+  const blocks = trimmed.match(/<(?:item|entry)\b[\s\S]*?<\/(?:item|entry)>/gi) || [];
+  for (const b of blocks) {
+    const title = tagVal(b, "title");
+    const desc = tagVal(b, "content:encoded") || tagVal(b, "content") || tagVal(b, "description") || tagVal(b, "summary");
+    let link = tagVal(b, "link");
+    if (!link) {
+      const lm = b.match(/<link[^>]+href=["']([^"']+)["']/i);
+      if (lm) link = decodeEntities(lm[1]);
+    }
+    const guid = tagVal(b, "guid") || tagVal(b, "id") || link;
+    const pub = tagVal(b, "pubDate") || tagVal(b, "published") || tagVal(b, "updated");
+    pushPost(guid, title || desc, desc || title, decodeEntities(link), pub ? new Date(pub) : null);
+  }
+  return items.sort((a, b) => b.ts - a.ts);
+}
+
+async function fetchFbSource(env) {
+  const t0 = Date.now();
+  const rssUrl = env && env.FB_HTTTQL_RSS_URL ? String(env.FB_HTTTQL_RSS_URL).trim() : "";
+  const fbToken = env && env.FB_ACCESS_TOKEN ? String(env.FB_ACCESS_TOKEN).trim() : "";
+  const fbPageId = env && env.FB_PAGE_ID ? String(env.FB_PAGE_ID).trim() : "htttql.hub";
+
+  if (!rssUrl && !fbToken) {
+    return { key: "fb_htttql", configured: false, ok: false, ms: 0, error: "Chưa kết nối nguồn RSS/Graph API", items: [] };
+  }
+
+  try {
+    let raw = "";
+    if (fbToken) {
+      const apiUrl = `https://graph.facebook.com/v21.0/${encodeURIComponent(fbPageId)}/posts?fields=id,message,created_time,permalink_url&limit=20&access_token=${encodeURIComponent(fbToken)}`;
+      const res = await fetch(apiUrl, { headers: { "User-Agent": UA } });
+      if (!res.ok) throw new Error("Graph API HTTP " + res.status);
+      raw = await res.text();
+    } else {
+      const res = await fetch(rssUrl, { headers: { "User-Agent": UA, "Accept": "application/rss+xml, application/atom+xml, application/json, application/xml, text/xml, */*" } });
+      if (!res.ok) throw new Error("RSS HTTP " + res.status);
+      raw = await res.text();
+    }
+    const items = parseFbFeedPayload(raw).slice(0, 25);
+    return { key: "fb_htttql", configured: true, ok: true, ms: Date.now() - t0, items };
+  } catch (e) {
+    return { key: "fb_htttql", configured: true, ok: false, ms: Date.now() - t0, error: String(e.message || e), items: [] };
+  }
+}
+
+async function fetchAllSources(onlinePages = 1, bypassCache = false, env = null) {
+  const hasFb = Boolean(env && (env.FB_HTTTQL_RSS_URL || env.FB_ACCESS_TOKEN));
+  const key = `all_sources_p${onlinePages}_fb${hasFb ? 1 : 0}`;
   return await cachedJson(
     key,
     async () => {
-      const resList = await Promise.all(SOURCES.map((s) => fetchSource(s, s.key === "online" ? onlinePages : 1)));
+      const jobs = SOURCES.map((s) => fetchSource(s, s.key === "online" ? onlinePages : 1));
+      if (hasFb) jobs.push(fetchFbSource(env));
+      const resList = await Promise.all(jobs);
       const bySource = {};
       const health = [];
       for (const r of resList) {
@@ -601,13 +709,23 @@ async function fetchAllSources(onlinePages = 1, bypassCache = false) {
           error: r.error || "",
         });
       }
-      return { bySource, health, fetchedAt: vnNowLabel() };
+      return { bySource, health, hasFb, fetchedAt: vnNowLabel() };
     },
     bypassCache
   );
 }
 
-async function fetchSingleSourceCached(sourceKey, onlinePages = 3, bypassCache = false) {
+async function fetchSingleSourceCached(sourceKey, onlinePages = 3, bypassCache = false, env = null) {
+  if (sourceKey === "fb_htttql") {
+    return await cachedJson(
+      "src_fb_htttql",
+      async () => {
+        const r = await fetchFbSource(env);
+        return r.items;
+      },
+      bypassCache
+    );
+  }
   const src = SOURCE_BY_KEY[sourceKey];
   if (!src) return [];
   const key = `src_${sourceKey}_p${onlinePages}`;
@@ -629,6 +747,9 @@ function mergeAndDedupe(bySource, days = null) {
     cutoffTs = c.getTime();
   }
   const orderedKeys = [...SOURCES].sort((a, b) => a.priority - b.priority).map((s) => s.key);
+  if (bySource.fb_htttql && bySource.fb_htttql.length) {
+    orderedKeys.unshift("fb_htttql");
+  }
   const byFp = new Map();
   const out = [];
 
@@ -664,7 +785,26 @@ function mergeAndDedupe(bySource, days = null) {
 
 // ---------------------------------------------------------------- Instant Detail & PDF Reader
 
-async function fetchArticleDetail(code, id) {
+async function fetchArticleDetail(code, id, env = null) {
+  if (code === "fb") {
+    const posts = await fetchSingleSourceCached("fb_htttql", 1, false, env);
+    const found = posts.find((p) => p.id === id);
+    if (!found) throw new Error("Không tìm thấy bài viết Fanpage này.");
+    return {
+      source: "fb_htttql",
+      sourceName: FB_SOURCE.name,
+      sourceEmoji: FB_SOURCE.emoji,
+      title: found.title,
+      date: found.date,
+      sender: "Fanpage Khoa HTTTQL — HUB",
+      url: found.url,
+      webUrl: found.url,
+      bodyText: found.fullText || found.title,
+      deadline: extractDeadline(found.fullText || found.title),
+      pdfs: [],
+      downloads: [],
+    };
+  }
   const route = DETAIL_ROUTES[code];
   if (!route) throw new Error("Mã nguồn không hợp lệ");
   const src = SOURCE_BY_KEY[route.source];
@@ -861,22 +1001,33 @@ async function answerCb(env, callbackQueryId, text = "", showAlert = false) {
 async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
   const safeCount = Math.min(Math.max(10, count || 100), 300);
   const startId = Math.max(1, upToMsgId - safeCount + 1);
-  const allIds = [];
-  for (let id = upToMsgId; id >= startId; id--) {
-    allIds.push(id);
-  }
+  // Telegram deleteMessages BẮT BUỘC danh sách message_ids phải tăng dần (strictly increasing)!
   const batches = [];
-  for (let i = 0; i < allIds.length; i += 100) {
-    batches.push(allIds.slice(i, i + 100));
+  for (let end = upToMsgId; end >= startId; end -= 100) {
+    const beg = Math.max(startId, end - 99);
+    const ids = [];
+    for (let id = beg; id <= end; id++) ids.push(id);
+    batches.push(ids);
   }
-  await Promise.all(
-    batches.map((ids) =>
-      tgApi(env, "deleteMessages", {
-        chat_id: chatId,
-        message_ids: ids,
-      })
-    )
-  );
+  let anyOk = false;
+  for (const ids of batches) {
+    const r = await tgApi(env, "deleteMessages", {
+      chat_id: chatId,
+      message_ids: ids,
+    });
+    if (r && r.ok) {
+      anyOk = true;
+    }
+  }
+  // Fallback xoá từng tin gần nhất nếu deleteMessages gặp lỗi ngoài ý muốn
+  if (!anyOk) {
+    const fallbackStart = Math.max(1, upToMsgId - 29);
+    const jobs = [];
+    for (let id = upToMsgId; id >= fallbackStart; id--) {
+      jobs.push(tgApi(env, "deleteMessage", { chat_id: chatId, message_id: id }));
+    }
+    await Promise.all(jobs);
+  }
 }
 
 // ---------------------------------------------------------------- Views & Keyboards
@@ -933,7 +1084,7 @@ function authorView() {
     `👤 <b>Author:</b> <b>${AUTHOR_NAME}</b>`,
     "🎓 <b>Đơn vị:</b> Sinh viên Khoa <b>Hệ thống Thông tin Quản lý (HTTTQL / MIS)</b> — Trường ĐH Ngân hàng TP.HCM (HUB)",
     "🤖 <b>Dự án:</b> <b>HUB Monitor Pro v2.0</b> — Hệ thống tự động cập nhật &amp; tra cứu thông báo toàn trường HUB",
-    "🛠️ <b>Công nghệ:</b> Telegram Bot API · Cloudflare Workers · GitHub Actions",
+    "🛠️ <b>Hệ thống:</b> Telegram Bot API · Cloudflare Edge · Tự động 24/7",
     "",
     "💬 <i>Cần góp ý tính năng mới, báo lỗi hoặc kết nối giao lưu, bấm nút Facebook bên dưới để liên hệ mình nhé!</i>",
   ].join("\n");
@@ -942,8 +1093,8 @@ function authorView() {
     inline_keyboard: [
       [{ text: `📘 Facebook Author — ${AUTHOR_NAME}`, url: AUTHOR_FB_URL }],
       [
-        { text: "🐙 Mã nguồn GitHub", url: REPO_URL },
         { text: "💻 Khoa HTTTQL (MIS)", callback_data: "m:mis" },
+        { text: "📘 Fanpage Khoa MIS", callback_data: "src:fb_htttql:1" },
       ],
       [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
@@ -956,24 +1107,24 @@ function misHubView() {
     "💻 <b>KHOA HỆ THỐNG THÔNG TIN QUẢN LÝ (MIS — HUB)</b>",
     "━━━━━━━━━━━━━━━━━━━━",
     "🎯 <b>Không gian dành riêng cho sinh viên HTTTQL:</b>",
-    "• 📢 Tự động theo dõi <b>Thông báo &amp; Sự kiện Khoa HTTTQL</b>",
-    "• 🌟 <b>Radar MIS:</b> Tự động gom mọi tin liên quan HTTTQL, CNTT, Đồ án, TMĐT, AI từ toàn trường HUB",
-    "• 📘 Lối tắt trực tiếp tới <b>Fanpage Facebook Khoa HTTTQL</b>",
+    "• 📘 Theo dõi <b>từng bài viết mới nhất trên Fanpage Khoa HTTTQL</b> (tính như thông báo chính thức!)",
+    "• 📢 Tự động theo dõi <b>Thông báo &amp; Sự kiện Website Khoa HTTTQL</b>",
+    "• 🌟 <b>Radar MIS:</b> Gom mọi tin liên quan HTTTQL, CNTT, Đồ án, TMĐT, AI từ toàn trường HUB",
     "",
     "👇 <i>Chọn mục bạn muốn xem:</i>",
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
-      [{ text: "📢 Thông báo Khoa HTTTQL (Mới nhất)", callback_data: "src:htttql:1" }],
+      [{ text: "📘 Bài viết mới nhất Fanpage Khoa HTTTQL", callback_data: "src:fb_htttql:1" }],
       [
+        { text: "📢 Thông báo Web Khoa", callback_data: "src:htttql:1" },
         { text: "🚀 Sự kiện & Tọa đàm MIS", callback_data: "src:htttql_ev:1" },
-        { text: "🌟 Radar tin MIS toàn HUB", callback_data: "mis:radar:1" },
       ],
-      [{ text: "📘 Mở Fanpage Facebook Khoa HTTTQL", url: FB_HTTTQL_URL }],
+      [{ text: "🌟 Radar tin MIS trên toàn trường HUB", callback_data: "mis:radar:1" }],
       [
+        { text: "🔗 Mở Facebook Khoa MIS", url: FB_HTTTQL_URL },
         { text: "🌐 Website Khoa HTTTQL", url: "https://khoahtttql.hub.edu.vn/" },
-        { text: "🎓 Sinh viên & Đoàn Khoa", url: "https://khoahtttql.hub.edu.vn/sinh-vien" },
       ],
       [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
@@ -994,22 +1145,25 @@ function portalsMenuView() {
     inline_keyboard: [
       [{ text: "🔥 Xem gộp TẤT CẢ các cổng HUB", callback_data: "list:all:latest:1" }],
       [
-        { text: "💻 Khoa HTTTQL (MIS)", callback_data: "src:htttql:1" },
+        { text: "📘 Fanpage Khoa MIS (FB)", callback_data: "src:fb_htttql:1" },
+        { text: "💻 Web Khoa HTTTQL", callback_data: "src:htttql:1" },
+      ],
+      [
         { text: "🚀 Sự kiện MIS", callback_data: "src:htttql_ev:1" },
-      ],
-      [
         { text: "📝 Phòng Khảo thí & ĐBCL", callback_data: "src:ktdbcl:1" },
+      ],
+      [
         { text: "🎓 Phòng Đào tạo (TB)", callback_data: "src:daotao:1" },
-      ],
-      [
         { text: "📰 Đào tạo (Tin & Thực tập)", callback_data: "src:daotao_news:1" },
-        { text: "🤝 Trung tâm SV (SCC)", callback_data: "src:scc:1" },
       ],
       [
+        { text: "🤝 Trung tâm SV (SCC)", callback_data: "src:scc:1" },
         { text: "🏫 Cổng Chính HUB", callback_data: "src:hub:1" },
-        { text: "💰 Tài chính - Kế toán", callback_data: "src:ketoan:1" },
       ],
-      [{ text: "🏛️ Cổng Sinh viên Online (online.hub.edu.vn)", callback_data: "src:online:1" }],
+      [
+        { text: "💰 Tài chính - Kế toán", callback_data: "src:ketoan:1" },
+        { text: "🏛️ Cổng SV Online", callback_data: "src:online:1" },
+      ],
       [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
   };
@@ -1405,10 +1559,10 @@ function buildStatusView(data) {
 
 // ---------------------------------------------------------------- Action Router (Shared by Commands & Callbacks)
 
-async function renderRoute(routeStr, bypassCache = false) {
+async function renderRoute(routeStr, bypassCache = false, env = null) {
   // Handle explicit refresh prefix "rf:..."
   if (routeStr.startsWith("rf:")) {
-    return await renderRoute(routeStr.slice(3), true);
+    return await renderRoute(routeStr.slice(3), true, env);
   }
 
   if (routeStr === "m:home") return mainMenuView();
@@ -1421,13 +1575,13 @@ async function renderRoute(routeStr, bypassCache = false) {
   if (routeStr === "m:help") return helpView();
 
   if (routeStr === "status") {
-    const data = await fetchAllSources(1, bypassCache);
+    const data = await fetchAllSources(1, bypassCache, env);
     return buildStatusView(data);
   }
 
   if (routeStr.startsWith("digest:")) {
     const days = parseInt(routeStr.split(":")[1], 10) || 7;
-    const data = await fetchAllSources(days >= 30 ? 3 : 1, bypassCache);
+    const data = await fetchAllSources(days >= 30 ? 3 : 1, bypassCache, env);
     const merged = mergeAndDedupe(data.bySource, days);
     return buildDigestView(merged, days);
   }
@@ -1437,7 +1591,7 @@ async function renderRoute(routeStr, bypassCache = false) {
     const mode = parts[2]; // latest | 7 | 30
     const page = parseInt(parts[3], 10) || 1;
     const onlinePages = mode === "30" ? 3 : 1;
-    const data = await fetchAllSources(onlinePages, bypassCache);
+    const data = await fetchAllSources(onlinePages, bypassCache, env);
     const days = mode === "latest" ? null : parseInt(mode, 10);
     let items = mergeAndDedupe(data.bySource, days);
     if (mode === "latest") items = items.slice(0, 30);
@@ -1454,20 +1608,47 @@ async function renderRoute(routeStr, bypassCache = false) {
     const page = parseInt(parts[2], 10) || 1;
     const src = SOURCE_BY_KEY[skey];
     if (!src) return mainMenuView();
-    const items = await fetchSingleSourceCached(skey, skey === "online" ? 3 : 1, bypassCache);
+
+    if (skey === "fb_htttql" && !(env && (env.FB_HTTTQL_RSS_URL || env.FB_ACCESS_TOKEN))) {
+      return {
+        text: [
+          "📘 <b>FANPAGE KHOA HTTTQL — CHƯA KẾT NỐI NGUỒN BÀI VIẾT</b>",
+          "━━━━━━━━━━━━━━━━━━━━",
+          "Facebook chặn máy chủ đọc bài viết trực tiếp nếu không có nguồn RSS hoặc Graph API.",
+          "",
+          "⚡ <b>Kích hoạt tự động nhận từng bài viết mới của Fanpage Khoa HTTTQL (30 giây):</b>",
+          "1. Tạo link RSS miễn phí cho <code>https://www.facebook.com/htttql.hub</code> tại <b>rss.app</b> (hoặc dùng Meta Page Access Token).",
+          "2. Thêm biến <code>FB_HTTTQL_RSS_URL</code> vào <b>Cloudflare Worker</b> &amp; <b>GitHub Secrets</b>.",
+          "3. Ngay lập tức mọi bài đăng mới trên Fanpage sẽ tự động xuất hiện như thông báo chính thức &amp; auto-push về Telegram!",
+        ].join("\n"),
+        markup: {
+          inline_keyboard: [
+            [{ text: "📘 Mở trực tiếp Fanpage Khoa HTTTQL", url: FB_HTTTQL_URL }],
+            [
+              { text: "📢 Xem Web Khoa HTTTQL", callback_data: "src:htttql:1" },
+              { text: "⬅️ Không gian MIS", callback_data: "m:mis" },
+            ],
+            [{ text: "📌 Quay lại Menu chính", callback_data: "m:home" }],
+          ],
+        },
+      };
+    }
+
+    const items = await fetchSingleSourceCached(skey, skey === "online" ? 3 : 1, bypassCache, env);
     const siblingMap = {
       daotao: { cb: "src:daotao_news:1", label: "📰 Xem Tin tức & Thực tập — Đào tạo" },
       daotao_news: { cb: "src:daotao:1", label: "🎓 Xem Thông báo — Phòng Đào tạo" },
-      htttql: { cb: "src:htttql_ev:1", label: "🚀 Xem Sự kiện & Tọa đàm MIS" },
-      htttql_ev: { cb: "src:htttql:1", label: "📢 Xem Thông báo Khoa HTTTQL" },
+      htttql: { cb: "src:fb_htttql:1", label: "📘 Xem Bài viết Fanpage Khoa HTTTQL" },
+      htttql_ev: { cb: "src:htttql:1", label: "📢 Xem Thông báo Web Khoa HTTTQL" },
+      fb_htttql: { cb: "src:htttql:1", label: "📢 Xem Thông báo Web Khoa HTTTQL" },
     };
     const sibling = siblingMap[skey];
     return buildPaginatedListView(`${src.emoji} ${src.name.toUpperCase()}`, items, page, `src:${skey}`, {
       webUrl: src.url,
       siblingCb: sibling ? sibling.cb : "",
       siblingLabel: sibling ? sibling.label : "",
-      backCb: skey.startsWith("htttql") ? "m:mis" : "m:portals",
-      backLabel: skey.startsWith("htttql") ? "⬅️ Không gian Khoa HTTTQL" : "⬅️ Chọn cổng HUB khác",
+      backCb: skey.startsWith("htttql") || skey === "fb_htttql" ? "m:mis" : "m:portals",
+      backLabel: skey.startsWith("htttql") || skey === "fb_htttql" ? "⬅️ Không gian Khoa HTTTQL" : "⬅️ Chọn cổng HUB khác",
     });
   }
 
@@ -1476,7 +1657,7 @@ async function renderRoute(routeStr, bypassCache = false) {
     const tpKey = parts[1];
     const page = parseInt(parts[2], 10) || 1;
     const tp = TOPICS[tpKey] || TOPICS.general;
-    const data = await fetchAllSources(2, bypassCache);
+    const data = await fetchAllSources(2, bypassCache, env);
     const all = mergeAndDedupe(data.bySource, null);
     const filtered = tpKey === "urgent"
       ? all.filter((it) => isUrgentTitle(it.title))
@@ -1489,7 +1670,7 @@ async function renderRoute(routeStr, bypassCache = false) {
 
   if (routeStr.startsWith("mis:radar:")) {
     const page = parseInt(routeStr.split(":")[2], 10) || 1;
-    const data = await fetchAllSources(2, bypassCache);
+    const data = await fetchAllSources(2, bypassCache, env);
     const all = mergeAndDedupe(data.bySource, null);
     const misItems = all.filter((it) => isMisRelated(it.title, it.source));
     return buildPaginatedListView("🌟 RADAR TIN KHOA HTTTQL (MIS) TOÀN HUB", misItems.slice(0, 40), page, "mis:radar", {
@@ -1503,7 +1684,7 @@ async function renderRoute(routeStr, bypassCache = false) {
     const lastColon = routeStr.lastIndexOf(":");
     const kw = routeStr.slice(2, lastColon);
     const page = parseInt(routeStr.slice(lastColon + 1), 10) || 1;
-    const data = await fetchAllSources(3, bypassCache);
+    const data = await fetchAllSources(3, bypassCache, env);
     const all = mergeAndDedupe(data.bySource, null);
     const kwNorm = stripAccents(kw).toLowerCase().trim();
     const found = all.filter((it) => stripAccents(it.title).toLowerCase().includes(kwNorm));
@@ -1518,7 +1699,7 @@ async function renderRoute(routeStr, bypassCache = false) {
     const code = parts[1];
     const id = parts[2];
     const backCb = parts.length > 3 ? parts.slice(3).join(":") : "m:home";
-    const detail = await fetchArticleDetail(code, id);
+    const detail = await fetchArticleDetail(code, id, env);
     return buildDetailView(detail, backCb);
   }
 
@@ -1648,7 +1829,7 @@ async function handleMessage(msg, env) {
   const msgId = sent && sent.result && sent.result.message_id;
 
   try {
-    const view = await renderRoute(route);
+    const view = await renderRoute(route, false, env);
     if (msgId) {
       await editMsg(env, chatId, msgId, view.text, view.markup);
     } else {
@@ -1752,7 +1933,7 @@ async function handleCallback(cb, env) {
   if (!chatId || !messageId) return;
 
   try {
-    const view = await renderRoute(data);
+    const view = await renderRoute(data, false, env);
     await editMsg(env, chatId, messageId, view.text, view.markup);
   } catch (e) {
     log("handleCallback error", data, e);
@@ -1769,7 +1950,7 @@ async function handleCallback(cb, env) {
 async function handleInlineQuery(iq, env) {
   const q = (iq.query || "").trim();
   try {
-    const data = await fetchAllSources(1, false);
+    const data = await fetchAllSources(1, false, env);
     let items = mergeAndDedupe(data.bySource, null);
     if (q) {
       const qn = stripAccents(q).toLowerCase();

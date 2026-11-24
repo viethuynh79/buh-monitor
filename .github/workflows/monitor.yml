@@ -39,6 +39,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FB_HTTTQL_RSS_URL: ${{ secrets.FB_HTTTQL_RSS_URL }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
         run: |
           if [ "${{ github.event.inputs.setup_bot }}" = "true" ]; then
             python monitor.py --setup-bot

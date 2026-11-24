@@ -68,7 +68,6 @@ ONLINE_ITEM_RE = re.compile(
 FB_HTTTQL_URL = "https://www.facebook.com/htttql.hub"
 AUTHOR_NAME = "Huynh Viet"
 AUTHOR_FB_URL = "https://www.facebook.com/profile.php?id=61591547874181"
-REPO_URL = "https://github.com/viethuynh79/buh-monitor"
 
 # Cấu hình toàn bộ nguồn thông báo thuộc hệ sinh thái HUB
 # Priority thấp hơn = được ưu tiên làm link chính khi trùng bài giữa nhiều cổng
@@ -564,40 +563,111 @@ def fetch_source_items(src, max_pages=1):
     return [], html, ""
 
 
-def fetch_fb_rss_items(rss_url):
-    """Đọc RSS feed tuỳ chọn của Fanpage Khoa HTTTQL (nếu người dùng cài FB_HTTTQL_RSS_URL)."""
-    if not rss_url:
-        return []
-    xml_text, _, _ = fetch_http(rss_url, timeout=20)
-    root = ET.fromstring(xml_text)
-    items = []
+def _parse_iso_or_rfc_date(s):
+    s = (s or "").strip()
     today = datetime.datetime.now(VN_TZ).date()
-    # RSS 2.0 <item>
+    if not s:
+        return today
+    m_iso = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+    if m_iso:
+        try:
+            return datetime.date(int(m_iso.group(1)), int(m_iso.group(2)), int(m_iso.group(3)))
+        except ValueError:
+            pass
+    for fmt in ("%a, %d %b %Y %H:%M:%S %z", "%a, %d %b %Y %H:%M:%S GMT", "%a, %d %b %Y %H:%M:%S %Z"):
+        try:
+            dt = datetime.datetime.strptime(s, fmt)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(VN_TZ)
+            return dt.date()
+        except ValueError:
+            continue
+    return today
+
+
+def fetch_fb_posts(rss_url="", page_id="htttql.hub", access_token=""):
+    """Đọc từng bài viết mới nhất từ Fanpage Khoa HTTTQL qua Meta Graph API hoặc RSS/Atom/JSON Feed."""
+    if not rss_url and not access_token:
+        return []
+
+    if access_token:
+        api_url = (
+            "https://graph.facebook.com/v21.0/{}/posts?"
+            "fields=id,message,created_time,permalink_url&limit=20&access_token={}"
+        ).format(urllib.parse.quote(page_id or "htttql.hub"), urllib.parse.quote(access_token))
+        raw_text, _, _ = fetch_http(api_url, timeout=20)
+    else:
+        raw_text, _, _ = fetch_http(rss_url, timeout=20)
+
+    trimmed = (raw_text or "").strip()
+    items = []
+    seen_ids = set()
+
+    def _add(raw_id, title_raw, body_raw, link, dt):
+        title = clean_text(title_raw or body_raw or "")[:220]
+        if not title:
+            return
+        iid = re.sub(r"[^a-zA-Z0-9_-]", "", str(raw_id or ""))[-24:] or str(abs(hash(title)))[:12]
+        if iid in seen_ids:
+            return
+        seen_ids.add(iid)
+        items.append({
+            "id": iid,
+            "source": "fb_htttql",
+            "code": "fb",
+            "title": title,
+            "summary_hint": clean_text(body_raw or title)[:300],
+            "date": dt.strftime("%d/%m/%Y"),
+            "date_dt": dt,
+            "url": (link or FB_HTTTQL_URL).strip(),
+        })
+
+    # 1) JSON Feed / Meta Graph API JSON
+    if trimmed.startswith("{") or trimmed.startswith("["):
+        data = json.loads(trimmed)
+        arr = data if isinstance(data, list) else (data.get("items") or data.get("data") or [])
+        for it in arr:
+            if not isinstance(it, dict):
+                continue
+            msg = it.get("message") or it.get("content_text") or it.get("summary") or it.get("description") or it.get("title") or ""
+            first_line = str(msg).splitlines()[0] if msg else ""
+            title = it.get("title") or first_line or msg
+            link = it.get("permalink_url") or it.get("url") or it.get("link") or FB_HTTTQL_URL
+            dt = _parse_iso_or_rfc_date(it.get("created_time") or it.get("date_published") or it.get("pubDate") or "")
+            _add(it.get("id") or link, title, msg, link, dt)
+        items.sort(key=lambda x: x["date_dt"], reverse=True)
+        return items[:20]
+
+    # 2) RSS 2.0 XML / Atom XML
+    root = ET.fromstring(trimmed)
+    # RSS <item>
     for el in root.findall(".//item"):
-        title = clean_text(el.findtext("title") or "")
-        link = (el.findtext("link") or FB_HTTTQL_URL).strip()
-        guid = (el.findtext("guid") or link).strip()
-        pub = (el.findtext("pubDate") or "").strip()
-        dt = today
-        if pub:
-            for fmt in ("%a, %d %b %Y %H:%M:%S %z", "%a, %d %b %Y %H:%M:%S GMT"):
-                try:
-                    dt = datetime.datetime.strptime(pub, fmt).date()
-                    break
-                except ValueError:
-                    continue
-        if title:
-            iid = re.sub(r"[^a-zA-Z0-9]", "", guid)[-18:] or str(abs(hash(title)))[:12]
-            items.append({
-                "id": iid,
-                "source": "fb_htttql",
-                "code": "fb",
-                "title": title[:220],
-                "date": dt.strftime("%d/%m/%Y"),
-                "date_dt": dt,
-                "url": link,
-            })
-    return items[:15]
+        title = el.findtext("title") or ""
+        desc = el.findtext("description") or ""
+        link = el.findtext("link") or FB_HTTTQL_URL
+        guid = el.findtext("guid") or link
+        dt = _parse_iso_or_rfc_date(el.findtext("pubDate") or "")
+        _add(guid, title or desc, desc or title, link, dt)
+    # Atom <entry>
+    for el in root.findall(".//{http://www.w3.org/2005/Atom}entry"):
+        title = el.findtext("{http://www.w3.org/2005/Atom}title") or ""
+        desc = (
+            el.findtext("{http://www.w3.org/2005/Atom}content")
+            or el.findtext("{http://www.w3.org/2005/Atom}summary")
+            or ""
+        )
+        link_el = el.find("{http://www.w3.org/2005/Atom}link")
+        link = (link_el.attrib.get("href") if link_el is not None else "") or FB_HTTTQL_URL
+        guid = el.findtext("{http://www.w3.org/2005/Atom}id") or link
+        dt = _parse_iso_or_rfc_date(
+            el.findtext("{http://www.w3.org/2005/Atom}published")
+            or el.findtext("{http://www.w3.org/2005/Atom}updated")
+            or ""
+        )
+        _add(guid, title or desc, desc or title, link, dt)
+
+    items.sort(key=lambda x: x["date_dt"], reverse=True)
+    return items[:20]
 
 
 # ---------------------------------------------------------------- Detail & PDF Enricher
@@ -652,6 +722,11 @@ def enrich_item(item, online_home_html=None, online_cookie=None):
             return info
 
         if item["source"] == "fb_htttql":
+            body = item.get("summary_hint") or item.get("title") or ""
+            info["summary"] = body[:280]
+            if not info["deadline"]:
+                info["deadline"] = extract_deadline(body)
+            info["sender"] = "Fanpage Khoa HTTTQL (Facebook)"
             return info
 
         # Các cổng DNN (*.hub.edu.vn)
@@ -890,8 +965,11 @@ def build_notification_card(item, extra_sources=None, detail=None, is_test=False
     # Inline Buttons giống phong cách ảnh mẫu (nút chính full-width nổi bật + nút phụ 2 cột)
     keyboard = []
     cb_view = "v:{}:{}".format(item["code"], item["id"])
-    if item["source"] != "fb_htttql" and len(cb_view.encode("utf-8")) <= 64:
-        hero_label = "📄 Xem chi tiết & Tải PDF" if (pdfs or downloads) else "📄 Xem nhanh nội dung"
+    if len(cb_view.encode("utf-8")) <= 64:
+        hero_label = (
+            "📄 Xem chi tiết & Tải PDF" if (pdfs or downloads)
+            else ("📘 Đọc nhanh bài viết Facebook" if item["source"] == "fb_htttql" else "📄 Xem nhanh nội dung")
+        )
         keyboard.append([{"text": hero_label, "callback_data": cb_view}])
 
     row2 = []
@@ -900,11 +978,14 @@ def build_notification_card(item, extra_sources=None, detail=None, is_test=False
     elif downloads:
         row2.append({"text": "📦 Tải tệp đính kèm", "url": downloads[0]})
     else:
-        src_cb = "src:{}:1".format(item["source"]) if item["source"] in SOURCE_BY_KEY else "m:mis"
+        src_cb = "src:{}:1".format(item["source"]) if (item["source"] in SOURCE_BY_KEY or item["source"] == "fb_htttql") else "m:mis"
         row2.append({"text": "{} Xem cổng này".format(src["emoji"]), "callback_data": src_cb})
 
     open_url = item["url"] if item["source"] != "online" else (pdfs[0] if pdfs else ONLINE_HOME)
-    open_label = "🌐 Mở bài viết" if item["source"] != "online" else "🏛️ Mở Online HUB"
+    open_label = (
+        "📘 Mở bài viết Facebook" if item["source"] == "fb_htttql"
+        else ("🏛️ Mở Online HUB" if item["source"] == "online" else "🌐 Mở bài viết")
+    )
     row2.append({"text": open_label, "url": open_url})
     keyboard.append(row2)
 
@@ -953,8 +1034,8 @@ def format_list_html(header, items, limit=15):
 
 # ---------------------------------------------------------------- Multi-Portal Aggregator
 
-def fetch_all_sources(fb_rss_url="", max_pages_online=1):
-    """Quét song song toàn bộ hệ sinh thái HUB. Trả về (results_by_source, meta_by_source)."""
+def fetch_all_sources(fb_rss_url="", fb_page_id="htttql.hub", fb_access_token="", max_pages_online=1):
+    """Quét song song toàn bộ hệ sinh thái HUB + Fanpage Khoa HTTTQL."""
     results = {}
     meta = {}
 
@@ -982,14 +1063,14 @@ def fetch_all_sources(fb_rss_url="", max_pages_online=1):
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCES) + 1) as ex:
         futs = [ex.submit(_worker, s) for s in SOURCES]
         fb_fut = None
-        if fb_rss_url:
+        if fb_rss_url or fb_access_token:
             def _fb_worker():
                 t0 = time.time()
                 try:
-                    its = fetch_fb_rss_items(fb_rss_url)
+                    its = fetch_fb_posts(fb_rss_url, fb_page_id, fb_access_token)
                     return "fb_htttql", its, {"ok": True, "ms": int((time.time() - t0) * 1000), "count": len(its)}
                 except Exception as e:  # noqa: BLE001
-                    log("Lỗi quét FB RSS: {}".format(e))
+                    log("Lỗi quét Fanpage Khoa HTTTQL: {}".format(e))
                     return "fb_htttql", [], {"ok": False, "ms": int((time.time() - t0) * 1000), "error": str(e), "count": 0}
             fb_fut = ex.submit(_fb_worker)
 
@@ -1120,16 +1201,18 @@ def handle_commands(token, state, results_by_source):
                     ).format(AUTHOR_NAME),
                     reply_markup={"inline_keyboard": [
                         [{"text": "📘 Facebook Author — {}".format(AUTHOR_NAME), "url": AUTHOR_FB_URL}],
-                        [{"text": "🐙 Mã nguồn GitHub", "url": REPO_URL}, {"text": "📌 Menu chính", "callback_data": "m:home"}],
+                        [{"text": "💻 Khoa HTTTQL (MIS)", "callback_data": "m:mis"}, {"text": "📌 Menu chính", "callback_data": "m:home"}],
                     ]},
                 )
             elif cmd == "/clear":
                 mid = msg.get("message_id")
                 if mid:
                     cnt = min(max(10, int(arg) if arg.isdigit() else 100), 300)
-                    all_ids = list(range(mid, max(0, mid - cnt), -1))
-                    for i in range(0, len(all_ids), 100):
-                        telegram_api_call(token, "deleteMessages", {"chat_id": cid, "message_ids": all_ids[i:i + 100]})
+                    start_id = max(1, mid - cnt + 1)
+                    # Telegram deleteMessages yêu cầu message_ids tăng dần (strictly increasing)
+                    for end in range(mid, start_id - 1, -100):
+                        beg = max(start_id, end - 99)
+                        telegram_api_call(token, "deleteMessages", {"chat_id": cid, "message_ids": list(range(beg, end + 1))})
                 telegram_send(
                     token, cid,
                     "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>",
@@ -1191,6 +1274,8 @@ def get_config():
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     chat_ids_raw = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
     fb_rss = os.environ.get("FB_HTTTQL_RSS_URL", "").strip()
+    fb_page_id = os.environ.get("FB_PAGE_ID", "").strip() or "htttql.hub"
+    fb_token = os.environ.get("FB_ACCESS_TOKEN", "").strip()
 
     if os.path.exists(CONFIG_FILE):
         try:
@@ -1199,11 +1284,13 @@ def get_config():
             token = token or str(cfg.get("telegram_bot_token", "")).strip()
             chat_ids_raw = chat_ids_raw or str(cfg.get("telegram_chat_id", "")).strip()
             fb_rss = fb_rss or str(cfg.get("fb_htttql_rss_url", "")).strip()
+            fb_page_id = str(cfg.get("fb_page_id", "")).strip() or fb_page_id
+            fb_token = fb_token or str(cfg.get("fb_access_token", "")).strip()
         except (ValueError, OSError):
             pass
 
     chat_ids = [c.strip() for c in chat_ids_raw.split(",") if c.strip()]
-    return token, chat_ids, fb_rss
+    return token, chat_ids, fb_rss, fb_page_id, fb_token
 
 
 def prune_seen_dict(d, max_items=250):
@@ -1236,7 +1323,7 @@ def main():
     do_setup = "--setup-bot" in args
     dry_run = "--dry-run" in args
 
-    token, chat_ids, fb_rss = get_config()
+    token, chat_ids, fb_rss, fb_page_id, fb_token = get_config()
     state = load_state()
 
     if do_setup:
@@ -1255,9 +1342,11 @@ def main():
             state["bot_ui_version"] = BOT_UI_VERSION
 
     log("Bắt đầu quét song song {} cổng HUB{} ...".format(
-        len(SOURCES), " + Fanpage RSS" if fb_rss else ""
+        len(SOURCES), " + Fanpage Khoa HTTTQL" if (fb_rss or fb_token) else ""
     ))
-    results, meta = fetch_all_sources(fb_rss_url=fb_rss, max_pages_online=1)
+    results, meta = fetch_all_sources(
+        fb_rss_url=fb_rss, fb_page_id=fb_page_id, fb_access_token=fb_token, max_pages_online=1
+    )
 
     ok_sources = [k for k, m in meta.items() if m.get("ok") and m.get("count", 0) > 0]
     for k, m in meta.items():
