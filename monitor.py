@@ -705,14 +705,18 @@ def enrich_item(item, online_home_html=None, online_cookie=None):
 
             m_body = re.search(r'id="[^"]*lblMessageBody"[^>]*>(.*?)</span>', d_html, re.S | re.I)
             body_html = m_body.group(1) if m_body else ""
-            # Lấy link file đính kèm trong body
+            # Lấy link file đính kèm hoặc link chi tiết trong body
             for am in re.finditer(r'href="([^"]+)"', body_html, re.I):
                 href = html_lib.unescape(am.group(1)).strip()
+                if not href or href.startswith("javascript:") or href.startswith("#"):
+                    continue
                 if href.startswith("/"):
                     href = "https://online.hub.edu.vn" + href
                 if re.search(r"\.(?:pdf|docx?|xlsx?|zip|rar)(?:\?|$)", href, re.I):
                     if href not in info["pdfs"]:
                         info["pdfs"].append(href)
+                elif re.match(r"^https?://", href, re.I) and "extra_url" not in info:
+                    info["extra_url"] = href
             body_text = clean_text(body_html)
             if body_text:
                 info["summary"] = body_text[:260]
@@ -976,6 +980,8 @@ def build_notification_card(item, extra_sources=None, detail=None, is_test=False
         row2.append({"text": "📥 Mở PDF trực tiếp", "url": pdfs[0]})
     elif downloads:
         row2.append({"text": "📦 Tải tệp đính kèm", "url": downloads[0]})
+    elif (detail or {}).get("extra_url"):
+        row2.append({"text": "🔗 Mở link chi tiết", "url": detail["extra_url"]})
     else:
         src_cb = "src:{}:1".format(item["source"]) if (item["source"] in SOURCE_BY_KEY or item["source"] == "fb_htttql") else "m:mis"
         row2.append({"text": "{} Xem cổng này".format(src["emoji"]), "callback_data": src_cb})

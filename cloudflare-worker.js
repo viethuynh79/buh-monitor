@@ -837,13 +837,18 @@ async function fetchArticleDetail(code, id, env = null) {
     const bodyHtml = mBody ? mBody[1] : "";
 
     const pdfs = [];
-    const linkRe = /href="([^"]+)"/gi;
+    const extraLinks = [];
+    const linkRe = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
     let lm;
     while ((lm = linkRe.exec(bodyHtml)) !== null) {
       let href = decodeEntities(lm[1]).trim();
+      const label = cleanText(lm[2]) || "Xem chi tiết";
+      if (!href || href.startsWith("javascript:") || href.startsWith("#")) continue;
       if (href.startsWith("/")) href = "https://online.hub.edu.vn" + href;
-      if (/\.(?:pdf|docx?|xlsx?|zip|rar)(?:\?|$)/i.test(href) && !pdfs.includes(href)) {
-        pdfs.push(href);
+      if (/\.(?:pdf|docx?|xlsx?|zip|rar)(?:\?|$)/i.test(href)) {
+        if (!pdfs.includes(href)) pdfs.push(href);
+      } else if (/^https?:\/\//i.test(href) && !extraLinks.some((x) => x.url === href)) {
+        extraLinks.push({ url: href, label: label.slice(0, 32) });
       }
     }
     const bodyText = cleanText(bodyHtml);
@@ -860,6 +865,7 @@ async function fetchArticleDetail(code, id, env = null) {
       deadline: extractDeadline(title + " " + bodyText),
       pdfs,
       downloads: [],
+      extraLinks,
     };
   }
 
@@ -1425,6 +1431,12 @@ function buildDetailView(detail, backCb = "m:home") {
   // Các nút tải tệp đính kèm /taifiledinhkem/
   detail.downloads.slice(0, 3).forEach((dlUrl, idx) => {
     keyboard.push([{ text: `📦 Tải tệp đính kèm #${idx + 1}`, url: dlUrl }]);
+  });
+
+  // Các link chi tiết đính kèm trong bài (VD: "Tại đây" -> scc.hub.edu.vn, Google Drive...)
+  (detail.extraLinks || []).slice(0, 3).forEach((lk, idx) => {
+    const lbl = lk.label && !/^tại đây$/i.test(lk.label) ? lk.label : `Xem chi tiết #${idx + 1}`;
+    keyboard.push([{ text: `🔗 Mở liên kết: ${lbl}`, url: lk.url }]);
   });
 
   keyboard.push([
