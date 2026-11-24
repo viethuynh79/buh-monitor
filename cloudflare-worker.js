@@ -206,6 +206,7 @@ const BOT_COMMANDS = [
   { command: "digest",  description: "📰 Bản tin tổng hợp tuần theo chủ đề" },
   { command: "portals", description: "🔗 Mở nhanh LMS, ĐKTC, eStudent, Fanpage MIS" },
   { command: "status",  description: "📊 Kiểm tra trạng thái 7 cổng HUB (real-time)" },
+  { command: "notify",  description: "🔔 Bật / Tắt nhận thông báo tự động" },
   { command: "clear",   description: "🧹 Xoá lịch sử trò chuyện gần đây" },
   { command: "author",  description: "👨‍💻 Thông tin tác giả Huynh Viet & Liên hệ" },
   { command: "help",    description: "❓ Hướng dẫn sử dụng Bot HUB Pro" },
@@ -987,6 +988,316 @@ async function answerCb(env, callbackQueryId, text = "", showAlert = false) {
   });
 }
 
+async function sendPhotoMsg(env, chatId, photoFileId, caption, replyMarkup = null) {
+  const payload = {
+    chat_id: chatId,
+    photo: photoFileId,
+    caption: String(caption || "").slice(0, 1020),
+    parse_mode: "HTML",
+  };
+  if (replyMarkup) payload.reply_markup = replyMarkup;
+  return await tgApi(env, "sendPhoto", payload);
+}
+
+// ---------------------------------------------------------------- Subscribers & Admin (Cloudflare KV)
+
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function getEnvAdminIds(env) {
+  const raw = String((env && env.ADMIN_CHAT_ID) || "").trim();
+  return raw ? raw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+}
+
+async function getAdminIds(env) {
+  const set = new Set(getEnvAdminIds(env));
+  if (env && env.SUBSCRIBERS_KV) {
+    try {
+      const stored = await env.SUBSCRIBERS_KV.get("cfg:admins", { type: "json" });
+      if (Array.isArray(stored)) stored.forEach((id) => set.add(String(id)));
+    } catch (_) {}
+  }
+  return Array.from(set);
+}
+
+async function isAdminUser(env, userId) {
+  if (!userId) return false;
+  const admins = await getAdminIds(env);
+  return admins.includes(String(userId));
+}
+
+async function claimAdminWithPin(env, userId, pin) {
+  if (!env || !env.SUBSCRIBERS_KV || !env.ADMIN_SETUP_PIN) return { ok: false, reason: "no_pin" };
+  const existing = await env.SUBSCRIBERS_KV.get("cfg:admins", { type: "json" }).catch(() => null);
+  if (Array.isArray(existing) && existing.length > 0) {
+    return { ok: false, reason: "already_claimed" };
+  }
+  if (String(pin || "").trim() !== String(env.ADMIN_SETUP_PIN).trim()) {
+    return { ok: false, reason: "wrong_pin" };
+  }
+  await env.SUBSCRIBERS_KV.put("cfg:admins", JSON.stringify([String(userId)]));
+  return { ok: true };
+}
+
+async function trackSubscriber(env, chat, fromUser = null, forceActivate = false) {
+  if (!env || !env.SUBSCRIBERS_KV || !chat || !chat.id) return null;
+  const id = String(chat.id);
+  const key = `u:${id}`;
+  const nowIso = new Date().toISOString();
+  const fullName =
+    [chat.first_name || (fromUser && fromUser.first_name), chat.last_name || (fromUser && fromUser.last_name)]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || chat.title || `User ${id}`;
+  const username = chat.username || (fromUser && fromUser.username) || "";
+
+  try {
+    const existing = await env.SUBSCRIBERS_KV.get(key, { type: "json" });
+    if (existing) {
+      const ageMs = existing.lastSeen ? Date.now() - Date.parse(existing.lastSeen) : 9e9;
+      const needsUpdate =
+        forceActivate ||
+        existing.blocked ||
+        existing.name !== fullName ||
+        existing.username !== username ||
+        ageMs > 6 * 3600 * 1000;
+      if (!needsUpdate) return existing;
+      const updated = {
+        ...existing,
+        name: fullName,
+        username,
+        type: chat.type || existing.type || "private",
+        subscribed: forceActivate ? true : (existing.blocked ? true : existing.subscribed !== false),
+        blocked: false,
+        lastSeen: nowIso,
+      };
+      await env.SUBSCRIBERS_KV.put(key, JSON.stringify(updated));
+      return updated;
+    }
+    const created = {
+      id,
+      type: chat.type || "private",
+      name: fullName,
+      username,
+      subscribed: true,
+      blocked: false,
+      joinedAt: nowIso,
+      lastSeen: nowIso,
+    };
+    await env.SUBSCRIBERS_KV.put(key, JSON.stringify(created));
+    return created;
+  } catch (e) {
+    log("trackSubscriber error", e);
+    return null;
+  }
+}
+
+async function setUserSubscription(env, chatId, subscribed, blocked = false) {
+  if (!env || !env.SUBSCRIBERS_KV) return null;
+  const key = `u:${chatId}`;
+  try {
+    const existing = (await env.SUBSCRIBERS_KV.get(key, { type: "json" })) || {
+      id: String(chatId),
+      type: "private",
+      name: `User ${chatId}`,
+      username: "",
+      joinedAt: new Date().toISOString(),
+    };
+    const updated = {
+      ...existing,
+      subscribed: Boolean(subscribed),
+      blocked: Boolean(blocked),
+      lastSeen: new Date().toISOString(),
+    };
+    await env.SUBSCRIBERS_KV.put(key, JSON.stringify(updated));
+    return updated;
+  } catch (e) {
+    log("setUserSubscription error", e);
+    return null;
+  }
+}
+
+async function listAllSubscribers(env) {
+  if (!env || !env.SUBSCRIBERS_KV) return [];
+  const keys = [];
+  let cursor = undefined;
+  for (let guard = 0; guard < 20; guard++) {
+    const res = await env.SUBSCRIBERS_KV.list({ prefix: "u:", cursor });
+    for (const k of (res.keys || [])) keys.push(k.name);
+    if (res.list_complete || !res.cursor) break;
+    cursor = res.cursor;
+  }
+  const users = [];
+  for (let i = 0; i < keys.length; i += 25) {
+    const batch = await Promise.all(
+      keys.slice(i, i + 25).map((k) => env.SUBSCRIBERS_KV.get(k, { type: "json" }).catch(() => null))
+    );
+    for (const u of batch) {
+      if (u && u.id) users.push(u);
+    }
+  }
+  users.sort((a, b) => String(b.joinedAt || "").localeCompare(String(a.joinedAt || "")));
+  return users;
+}
+
+function formatBroadcastPayload(bodyText, urgent = false) {
+  const header = urgent
+    ? "🚨 <b>THÔNG BÁO KHẨN TỪ QUẢN TRỊ VIÊN</b>"
+    : "📣 <b>THÔNG BÁO TỪ QUẢN TRỊ VIÊN — HUB MONITOR PRO</b>";
+  return [
+    header,
+    "━━━━━━━━━━━━━━━━━━━━",
+    escapeHtml(bodyText),
+    "",
+    `📅 <code>${vnNowLabel()}</code> · 👤 <i>Admin ${AUTHOR_NAME}</i>`,
+  ].join("\n");
+}
+
+async function executeBroadcast(env, draft) {
+  const users = await listAllSubscribers(env);
+  const targets = users.filter((u) => u.subscribed !== false && !u.blocked);
+  const formatted = formatBroadcastPayload(draft.text || "", Boolean(draft.urgent));
+  const markup = {
+    inline_keyboard: [[
+      { text: "📌 Mở Menu HUB", callback_data: "m:home" },
+      { text: "🔕 Tắt thông báo", callback_data: "user:notify_off" },
+    ]],
+  };
+
+  let sent = 0;
+  let blocked = 0;
+  let failed = 0;
+
+  for (let i = 0; i < targets.length; i += 20) {
+    const batch = targets.slice(i, i + 20);
+    await Promise.all(
+      batch.map(async (u) => {
+        const r = draft.photoFileId
+          ? await sendPhotoMsg(env, u.id, draft.photoFileId, formatted, markup)
+          : await sendMsg(env, u.id, formatted, markup);
+        if (r && r.ok) {
+          sent += 1;
+        } else {
+          const desc = String((r && r.description) || "").toLowerCase();
+          if (desc.includes("blocked") || desc.includes("deactivated") || desc.includes("chat not found") || desc.includes("kicked")) {
+            blocked += 1;
+            await setUserSubscription(env, u.id, false, true);
+          } else {
+            failed += 1;
+          }
+        }
+      })
+    );
+  }
+  return { total: targets.length, sent, blocked, failed };
+}
+
+async function adminHomeView(env, adminId) {
+  const users = await listAllSubscribers(env);
+  const active = users.filter((u) => u.subscribed !== false && !u.blocked).length;
+  const muted = users.length - active;
+
+  const text = [
+    "🛡️ <b>BẢNG QUẢN TRỊ ADMIN — HUB MONITOR PRO</b>",
+    `👤 <b>Quản trị viên:</b> ${AUTHOR_NAME} (<code>${escapeHtml(adminId)}</code>)`,
+    "━━━━━━━━━━━━━━━━━━━━",
+    `👥 <b>Tổng người dùng đã /start:</b> <b>${users.length}</b>`,
+    `🔔 <b>Đang bật nhận thông báo:</b> <b>${active}</b>`,
+    `🔕 <b>Đã tắt TB / chặn bot:</b> <b>${muted}</b>`,
+    `⏱ <i>Cập nhật: ${vnNowLabel()}</i>`,
+    "",
+    "💡 <i>Mẹo nhanh: Gõ <code>/bc Nội dung...</code> (hoặc gửi ảnh kèm chú thích <code>/bc ...</code>) để tạo bản xem trước &amp; phát sóng ngay!</i>",
+  ].join("\n");
+
+  const markup = {
+    inline_keyboard: [
+      [{ text: `📢 Gửi thông báo ngay cho TẤT CẢ (${active} người)`, callback_data: "adm:bc_ask" }],
+      [
+        { text: "🚨 Gửi thông báo KHẨN", callback_data: "adm:bc_urgent_ask" },
+        { text: "🧪 Test gửi riêng Admin", callback_data: "adm:test_self" },
+      ],
+      [
+        { text: `👥 Danh sách người dùng (${users.length})`, callback_data: "adm:users:1" },
+        { text: "🔄 Làm mới thống kê", callback_data: "adm:home" },
+      ],
+      [{ text: "🏠 Quay lại Menu chính", callback_data: "m:home" }],
+    ],
+  };
+  return { text, markup };
+}
+
+async function adminUsersView(env, page = 1) {
+  const users = await listAllSubscribers(env);
+  const perPage = 10;
+  const totalPages = Math.max(1, Math.ceil(users.length / perPage));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const slice = users.slice((safePage - 1) * perPage, safePage * perPage);
+
+  const lines = [
+    "👥 <b>DANH SÁCH NGƯỜI DÙNG BOT</b>",
+    `<i>Trang ${safePage}/${totalPages} · Tổng ${users.length} người</i>`,
+    "━━━━━━━━━━━━━━━━━━━━",
+  ];
+
+  if (!slice.length) {
+    lines.push("\n<i>Chưa có người dùng nào được ghi nhận.</i>");
+  } else {
+    slice.forEach((u, idx) => {
+      const n = (safePage - 1) * perPage + idx + 1;
+      const st = u.blocked ? "🚫" : (u.subscribed === false ? "🔕" : "🔔");
+      const uname = u.username ? ` (@${escapeHtml(u.username)})` : "";
+      const joined = u.joinedAt ? String(u.joinedAt).slice(0, 10) : "—";
+      lines.push(`<b>${n}.</b> ${st} <b>${escapeHtml(u.name)}</b>${uname}`);
+      lines.push(`   └ ID: <code>${escapeHtml(u.id)}</code> · Tham gia: <code>${joined}</code>`);
+    });
+  }
+
+  const kb = [];
+  if (totalPages > 1) {
+    const nav = [];
+    if (safePage > 1) nav.push({ text: "⬅️ Trước", callback_data: `adm:users:${safePage - 1}` });
+    nav.push({ text: `📄 ${safePage}/${totalPages}`, callback_data: "noop" });
+    if (safePage < totalPages) nav.push({ text: "Sau ➡️", callback_data: `adm:users:${safePage + 1}` });
+    kb.push(nav);
+  }
+  kb.push([
+    { text: "🔄 Làm mới", callback_data: `adm:users:${safePage}` },
+    { text: "🛡️ Quay lại Admin", callback_data: "adm:home" },
+  ]);
+  return { text: lines.join("\n"), markup: { inline_keyboard: kb } };
+}
+
+async function userNotifyView(env, chatId) {
+  let sub = true;
+  if (env && env.SUBSCRIBERS_KV) {
+    const u = await env.SUBSCRIBERS_KV.get(`u:${chatId}`, { type: "json" }).catch(() => null);
+    if (u && u.subscribed === false) sub = false;
+  }
+  const text = [
+    "🔔 <b>CÀI ĐẶT NHẬN THÔNG BÁO TỰ ĐỘNG</b>",
+    "━━━━━━━━━━━━━━━━━━━━",
+    `Trạng thái hiện tại: ${sub ? "🟢 <b>ĐANG BẬT</b>" : "🔕 <b>ĐANG TẮT</b>"}`,
+    "",
+    sub
+      ? "Bạn sẽ tự động nhận thông báo ngay khi các cổng trường HUB đăng tin mới hoặc khi Quản trị viên gửi thông báo quan trọng."
+      : "Bạn đang tạm tắt thông báo tự động. Bấm nút bên dưới bất cứ lúc nào để bật lại!",
+  ].join("\n");
+
+  const markup = {
+    inline_keyboard: [
+      [
+        sub
+          ? { text: "🔕 Tắt thông báo tự động", callback_data: "user:notify_off" }
+          : { text: "🔔 Bật lại thông báo tự động", callback_data: "user:notify_on" },
+      ],
+      [{ text: "📌 Quay lại Menu chính", callback_data: "m:home" }],
+    ],
+  };
+  return { text, markup };
+}
+
 async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
   const safeCount = Math.min(Math.max(10, count || 100), 300);
   const startId = Math.max(1, upToMsgId - safeCount + 1);
@@ -1270,6 +1581,7 @@ function helpView() {
     "• <code>/digest</code> — Bản tin tổng hợp tuần theo chủ đề",
     "• <code>/portals</code> — Mở nhanh LMS, ĐKTC, eStudent...",
     "• <code>/status</code> — Kiểm tra tốc độ &amp; tình trạng 7 cổng HUB",
+    "• <code>/notify</code> — Bật / Tắt nhận thông báo tự động",
     "• <code>/clear</code> — Xoá lịch sử trò chuyện gần đây (VD: <code>/clear 200</code>)",
     "• <code>/author</code> — Thông tin tác giả Huynh Viet &amp; liên hệ",
     "",
@@ -1700,21 +2012,156 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
 
 async function handleMessage(msg, env) {
   const chatId = msg.chat && msg.chat.id;
-  const text = (msg.text || "").trim();
-  if (!chatId || !text) return;
+  const fromId = (msg.from && msg.from.id) || chatId;
+  const text = (msg.text || msg.caption || "").trim();
+  const photoFileId = msg.photo && msg.photo.length ? msg.photo[msg.photo.length - 1].file_id : "";
+  if (!chatId || (!text && !photoFileId)) return;
 
   const isPrivate = msg.chat.type === "private";
   const isCommand = text.startsWith("/");
   const cmd = isCommand ? text.split(/\s+/)[0].split("@")[0].toLowerCase() : "";
   const arg = isCommand ? text.slice(text.split(/\s+/)[0].length).trim() : text;
 
+  // Tự động lưu người dùng vào Cloudflare KV để nhận thông báo tự động & Broadcast
+  await trackSubscriber(env, msg.chat, msg.from, cmd === "/start");
+
+  // 1) Kiểm tra nếu Admin đang trả lời ô ForceReply soạn thông báo Broadcast
+  const replyText = (msg.reply_to_message && msg.reply_to_message.text) || "";
+  const isReplyBroadcast = replyText.includes("SOẠN THÔNG BÁO PHÁT SÓNG");
+  if (isReplyBroadcast && (await isAdminUser(env, fromId))) {
+    const urgent = replyText.includes("KHẨN");
+    const draft = { text, photoFileId, urgent, createdAt: Date.now() };
+    if (env.SUBSCRIBERS_KV) {
+      await env.SUBSCRIBERS_KV.put(`draft:${fromId}`, JSON.stringify(draft), { expirationTtl: 900 });
+    }
+    const users = await listAllSubscribers(env);
+    const activeCount = users.filter((u) => u.subscribed !== false && !u.blocked).length;
+    const preview = formatBroadcastPayload(text, urgent);
+    const confirmKb = {
+      inline_keyboard: [
+        [{ text: `✅ XÁC NHẬN GỬI NGAY (${activeCount} người)`, callback_data: "adm:bc_send" }],
+        [
+          { text: "🧪 Gửi thử cho mình", callback_data: "adm:bc_preview" },
+          { text: "❌ Huỷ bỏ", callback_data: "adm:bc_cancel" },
+        ],
+      ],
+    };
+    const headerNote = `👀 <b>XEM TRƯỚC THÔNG BÁO TRƯỚC KHI GỬI (${activeCount} người nhận):</b>\n\n`;
+    if (photoFileId) {
+      await sendPhotoMsg(env, chatId, photoFileId, preview, confirmKb);
+    } else {
+      await sendMsg(env, chatId, headerNote + preview, confirmKb);
+    }
+    return;
+  }
+
   // Bỏ qua tin nhắn thường trong group chat (trừ khi reply prompt tìm kiếm của bot)
-  const isReplyToSearch = Boolean(
-    msg.reply_to_message &&
-    msg.reply_to_message.text &&
-    msg.reply_to_message.text.includes("Nhập từ khoá")
-  );
+  const isReplyToSearch = Boolean(replyText && replyText.includes("Nhập từ khoá"));
   if (!isCommand && !isPrivate && !isReplyToSearch) return;
+
+  // 2) Khu vực QUẢN TRỊ VIÊN (/admin, /broadcast, /bc, /tb, /bc!, /testpush)
+  if (cmd === "/admin") {
+    if (arg && !(await isAdminUser(env, fromId))) {
+      const claim = await claimAdminWithPin(env, fromId, arg);
+      if (claim.ok) {
+        const v = await adminHomeView(env, fromId);
+        await sendMsg(
+          env,
+          chatId,
+          "✅ <b>Xác thực Quản trị viên thành công!</b> Tài khoản của bạn đã được khoá làm Admin vĩnh viễn.\n\n" + v.text,
+          v.markup
+        );
+        return;
+      }
+      await sendMsg(env, chatId, "⛔ Mã xác thực không đúng hoặc Admin đã được thiết lập trước đó.");
+      return;
+    }
+    if (!(await isAdminUser(env, fromId))) {
+      await sendMsg(env, chatId, "⛔ Bạn không có quyền truy cập khu vực Quản trị viên.");
+      return;
+    }
+    const v = await adminHomeView(env, fromId);
+    await sendMsg(env, chatId, v.text, v.markup);
+    return;
+  }
+
+  if (cmd === "/broadcast" || cmd === "/bc" || cmd === "/tb" || cmd === "/bc!") {
+    if (!(await isAdminUser(env, fromId))) {
+      await sendMsg(env, chatId, "⛔ Chỉ Quản trị viên mới có quyền gửi thông báo hàng loạt.");
+      return;
+    }
+    if (!arg && !photoFileId) {
+      await sendMsg(
+        env,
+        chatId,
+        "📢 <b>Cách gửi thông báo cho tất cả người dùng:</b>\n" +
+        "• <code>/bc Nội dung thông báo...</code> (xem trước rồi xác nhận)\n" +
+        "• <code>/bc! Nội dung thông báo...</code> (gửi thẳng ngay lập tức!)\n" +
+        "• Hoặc gửi <b>ảnh kèm chú thích</b> <code>/bc Nội dung...</code>\n" +
+        "• Hoặc mở <code>/admin</code> để dùng giao diện nút bấm!"
+      );
+      return;
+    }
+    const draft = { text: arg, photoFileId, urgent: false, createdAt: Date.now() };
+    if (cmd === "/bc!") {
+      const waitMsg = await sendMsg(env, chatId, "⏳ Đang phát sóng thông báo tới tất cả người dùng...");
+      const stat = await executeBroadcast(env, draft);
+      const report = [
+        "✅ <b>PHÁT SÓNG TRỰC TIẾP HOÀN TẤT!</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        `📤 Đã gửi thành công: <b>${stat.sent}/${stat.total}</b> người`,
+        `🚫 Đã chặn bot (tự gỡ): <b>${stat.blocked}</b> người`,
+        `❌ Lỗi khác: <b>${stat.failed}</b> người`,
+        `⏱ Hoàn tất lúc: <code>${vnNowLabel()}</code>`,
+      ].join("\n");
+      const mid = waitMsg && waitMsg.result && waitMsg.result.message_id;
+      if (mid) {
+        await editMsg(env, chatId, mid, report, { inline_keyboard: [[{ text: "🛡️ Mở bảng Admin", callback_data: "adm:home" }]] });
+      } else {
+        await sendMsg(env, chatId, report);
+      }
+      return;
+    }
+
+    if (env.SUBSCRIBERS_KV) {
+      await env.SUBSCRIBERS_KV.put(`draft:${fromId}`, JSON.stringify(draft), { expirationTtl: 900 });
+    }
+    const users = await listAllSubscribers(env);
+    const activeCount = users.filter((u) => u.subscribed !== false && !u.blocked).length;
+    const preview = formatBroadcastPayload(arg, false);
+    const confirmKb = {
+      inline_keyboard: [
+        [{ text: `✅ XÁC NHẬN GỬI NGAY (${activeCount} người)`, callback_data: "adm:bc_send" }],
+        [
+          { text: "🧪 Gửi thử cho mình", callback_data: "adm:bc_preview" },
+          { text: "❌ Huỷ bỏ", callback_data: "adm:bc_cancel" },
+        ],
+      ],
+    };
+    if (photoFileId) {
+      await sendPhotoMsg(env, chatId, photoFileId, preview, confirmKb);
+    } else {
+      await sendMsg(env, chatId, `👀 <b>XEM TRƯỚC (${activeCount} người sẽ nhận):</b>\n\n` + preview, confirmKb);
+    }
+    return;
+  }
+
+  if (cmd === "/testpush") {
+    if (!(await isAdminUser(env, fromId))) {
+      await sendMsg(env, chatId, "⛔ Lệnh này chỉ dành cho Quản trị viên.");
+      return;
+    }
+    const preview = formatBroadcastPayload("Đây là thông báo kiểm tra tức thì từ bảng Quản trị viên HUB Monitor Pro! 🔔", false);
+    await sendMsg(env, chatId, preview, { inline_keyboard: [[{ text: "🛡️ Về bảng Admin", callback_data: "adm:home" }]] });
+    return;
+  }
+
+  // 3) Cài đặt nhận thông báo cho người dùng (/notify)
+  if (cmd === "/notify") {
+    const v = await userNotifyView(env, chatId);
+    await sendMsg(env, chatId, v.text, v.markup);
+    return;
+  }
 
   // Các màn hình tĩnh trả lời tức thì <50ms
   if (cmd === "/start" || cmd === "/menu") {
@@ -1841,10 +2288,128 @@ async function handleCallback(cb, env) {
   const data = cb.data || "";
   const msg = cb.message;
   const chatId = msg && msg.chat && msg.chat.id;
+  const fromId = (cb.from && cb.from.id) || chatId;
   const messageId = msg && msg.message_id;
+
+  if (msg && msg.chat) {
+    await trackSubscriber(env, msg.chat, cb.from, false);
+  }
 
   if (data === "noop") {
     await answerCb(env, cb.id, "Dùng nút Trước / Sau để chuyển trang");
+    return;
+  }
+
+  // User toggle auto-notifications
+  if (data === "user:notify_on" || data === "user:notify_off") {
+    const enable = data === "user:notify_on";
+    await setUserSubscription(env, chatId, enable, false);
+    await answerCb(env, cb.id, enable ? "🔔 Đã bật nhận thông báo!" : "🔕 Đã tắt nhận thông báo!");
+    if (chatId && messageId) {
+      const v = await userNotifyView(env, chatId);
+      await editMsg(env, chatId, messageId, v.text, v.markup);
+    }
+    return;
+  }
+
+  // Admin Panel Callbacks (strictly protected!)
+  if (data.startsWith("adm:")) {
+    if (!(await isAdminUser(env, fromId))) {
+      await answerCb(env, cb.id, "⛔ Chỉ Quản trị viên mới dùng được nút này!", true);
+      return;
+    }
+    if (data === "adm:home") {
+      await answerCb(env, cb.id, "🛡️ Đang tải bảng Admin...");
+      const v = await adminHomeView(env, fromId);
+      await editMsg(env, chatId, messageId, v.text, v.markup);
+      return;
+    }
+    if (data.startsWith("adm:users:")) {
+      const page = parseInt(data.split(":")[2], 10) || 1;
+      await answerCb(env, cb.id, "👥 Đang tải danh sách...");
+      const v = await adminUsersView(env, page);
+      await editMsg(env, chatId, messageId, v.text, v.markup);
+      return;
+    }
+    if (data === "adm:bc_ask" || data === "adm:bc_urgent_ask") {
+      const isUrgent = data === "adm:bc_urgent_ask";
+      await answerCb(env, cb.id, "Nhập nội dung thông báo...");
+      await sendMsg(
+        env,
+        chatId,
+        (isUrgent
+          ? "🚨 <b>SOẠN THÔNG BÁO PHÁT SÓNG KHẨN</b>\n"
+          : "📢 <b>SOẠN THÔNG BÁO PHÁT SÓNG CHO TẤT CẢ NGƯỜI DÙNG</b>\n") +
+        "<i>Hãy trả lời tin nhắn này bằng văn bản (hoặc gửi ảnh kèm chú thích). Bot sẽ cho bạn xem trước trước khi phát sóng!</i>",
+        { force_reply: true, input_field_placeholder: "Nhập nội dung thông báo gửi tới mọi người..." }
+      );
+      return;
+    }
+    if (data === "adm:bc_preview") {
+      const draft = env.SUBSCRIBERS_KV ? await env.SUBSCRIBERS_KV.get(`draft:${fromId}`, { type: "json" }) : null;
+      if (!draft) {
+        await answerCb(env, cb.id, "Bản nháp đã hết hạn (15 phút), vui lòng soạn lại.", true);
+        return;
+      }
+      await answerCb(env, cb.id, "🧪 Đang gửi thử cho bạn...");
+      const formatted = formatBroadcastPayload(draft.text || "", Boolean(draft.urgent));
+      if (draft.photoFileId) {
+        await sendPhotoMsg(env, chatId, draft.photoFileId, formatted);
+      } else {
+        await sendMsg(env, chatId, formatted);
+      }
+      return;
+    }
+    if (data === "adm:bc_cancel") {
+      if (env.SUBSCRIBERS_KV) await env.SUBSCRIBERS_KV.delete(`draft:${fromId}`);
+      await answerCb(env, cb.id, "❌ Đã huỷ bản nháp.");
+      const v = await adminHomeView(env, fromId);
+      if (msg && msg.photo) {
+        await tgApi(env, "deleteMessage", { chat_id: chatId, message_id: messageId });
+        await sendMsg(env, chatId, v.text, v.markup);
+      } else {
+        await editMsg(env, chatId, messageId, v.text, v.markup);
+      }
+      return;
+    }
+    if (data === "adm:bc_send") {
+      const draft = env.SUBSCRIBERS_KV ? await env.SUBSCRIBERS_KV.get(`draft:${fromId}`, { type: "json" }) : null;
+      if (!draft) {
+        await answerCb(env, cb.id, "Bản nháp đã hết hạn, vui lòng soạn lại.", true);
+        return;
+      }
+      await answerCb(env, cb.id, "🚀 Đang phát sóng thông báo...");
+      if (env.SUBSCRIBERS_KV) await env.SUBSCRIBERS_KV.delete(`draft:${fromId}`);
+      let statusMid = messageId;
+      if (msg && msg.photo) {
+        const sentWait = await sendMsg(env, chatId, "⏳ <b>Đang gửi thông báo tới tất cả người dùng...</b>");
+        statusMid = sentWait && sentWait.result && sentWait.result.message_id;
+      } else {
+        await editMsg(env, chatId, messageId, "⏳ <b>Đang gửi thông báo tới tất cả người dùng...</b>");
+      }
+      const stat = await executeBroadcast(env, draft);
+      const report = [
+        "✅ <b>PHÁT SÓNG THÔNG BÁO HOÀN TẤT!</b>",
+        "━━━━━━━━━━━━━━━━━━━━",
+        `📤 Đã gửi thành công: <b>${stat.sent}/${stat.total}</b> người`,
+        `🚫 Đã chặn bot (tự gỡ): <b>${stat.blocked}</b> người`,
+        `❌ Lỗi khác: <b>${stat.failed}</b> người`,
+        `⏱ Hoàn tất lúc: <code>${vnNowLabel()}</code>`,
+      ].join("\n");
+      const doneKb = { inline_keyboard: [[{ text: "🛡️ Quay lại bảng Admin", callback_data: "adm:home" }]] };
+      if (statusMid) {
+        await editMsg(env, chatId, statusMid, report, doneKb);
+      } else {
+        await sendMsg(env, chatId, report, doneKb);
+      }
+      return;
+    }
+    if (data === "adm:test_self") {
+      await answerCb(env, cb.id, "🧪 Đang gửi thông báo thử...");
+      const preview = formatBroadcastPayload("Kiểm tra đẩy thông báo tức thì từ Quản trị viên HUB Monitor Pro! 🔔", false);
+      await sendMsg(env, chatId, preview);
+      return;
+    }
     return;
   }
 
@@ -2046,6 +2611,20 @@ export default {
     }
     if (url.pathname === "/setup" && request.method === "GET") {
       return await handleSetup(request, env);
+    }
+    if (url.pathname === "/api/subscribers" && request.method === "GET") {
+      if (!env.BOT_TOKEN) return new Response("Missing token", { status: 500 });
+      const expected = await sha256Hex(`${env.BOT_TOKEN}:subscribers`);
+      const provided = (request.headers.get("X-Hub-Auth") || "").trim();
+      if (!provided || provided !== expected) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+      const users = await listAllSubscribers(env);
+      const activeIds = users.filter((u) => u.subscribed !== false && !u.blocked).map((u) => String(u.id));
+      return new Response(
+        JSON.stringify({ ok: true, count: activeIds.length, chat_ids: activeIds }),
+        { headers: { "Content-Type": "application/json; charset=utf-8" } }
+      );
     }
     if (url.pathname === "/" && request.method === "GET") {
       return new Response(

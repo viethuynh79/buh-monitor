@@ -32,6 +32,7 @@ Cách dùng thủ công:
 
 import concurrent.futures
 import datetime
+import hashlib
 import html as html_lib
 import http.cookiejar
 import json
@@ -56,7 +57,7 @@ USER_AGENT = (
 )
 
 VN_TZ = datetime.timezone(datetime.timedelta(hours=7))
-BOT_UI_VERSION = 3
+BOT_UI_VERSION = 4
 
 ONLINE_HOME = "https://online.hub.edu.vn/"
 ONLINE_GRID_TARGET = "ctl00$ContentPlaceHolder1$ctl00$ctl00$ctl00$ctl00$grvNewsgroup"
@@ -201,6 +202,7 @@ BOT_COMMANDS = [
     {"command": "digest", "description": "📰 Bản tin tổng hợp tuần theo chủ đề"},
     {"command": "portals", "description": "🔗 Mở nhanh LMS, ĐKTC, eStudent, Fanpage MIS"},
     {"command": "status", "description": "📊 Kiểm tra trạng thái 7 cổng HUB (real-time)"},
+    {"command": "notify", "description": "🔔 Bật / Tắt nhận thông báo tự động"},
     {"command": "clear", "description": "🧹 Xoá lịch sử trò chuyện gần đây"},
     {"command": "author", "description": "👨‍💻 Thông tin tác giả Huynh Viet & Liên hệ"},
     {"command": "help", "description": "❓ Hướng dẫn sử dụng Bot HUB Pro"},
@@ -1281,6 +1283,7 @@ def get_config():
     fb_rss = os.environ.get("FB_HTTTQL_RSS_URL", "").strip()
     fb_page_id = os.environ.get("FB_PAGE_ID", "").strip() or "htttql.hub"
     fb_token = os.environ.get("FB_ACCESS_TOKEN", "").strip()
+    worker_url = os.environ.get("WORKER_URL", "").strip().rstrip("/")
 
     if os.path.exists(CONFIG_FILE):
         try:
@@ -1291,11 +1294,31 @@ def get_config():
             fb_rss = fb_rss or str(cfg.get("fb_htttql_rss_url", "")).strip()
             fb_page_id = str(cfg.get("fb_page_id", "")).strip() or fb_page_id
             fb_token = fb_token or str(cfg.get("fb_access_token", "")).strip()
+            worker_url = worker_url or str(cfg.get("worker_url", "")).strip().rstrip("/")
         except (ValueError, OSError):
             pass
 
     chat_ids = [c.strip() for c in chat_ids_raw.split(",") if c.strip()]
-    return token, chat_ids, fb_rss, fb_page_id, fb_token
+    return token, chat_ids, fb_rss, fb_page_id, fb_token, worker_url
+
+
+def fetch_kv_subscribers(token, worker_url):
+    """Lấy danh sách tất cả người dùng đã /start bot từ Cloudflare KV (để auto-push tin mới)."""
+    if not token or not worker_url:
+        return []
+    try:
+        auth = hashlib.sha256("{}:subscribers".format(token).encode("utf-8")).hexdigest()
+        req = urllib.request.Request(
+            worker_url + "/api/subscribers",
+            headers={"User-Agent": USER_AGENT, "X-Hub-Auth": auth},
+        )
+        with urllib.request.urlopen(req, timeout=15, context=SSL_CTX) as resp:
+            data = json.loads(resp.read().decode("utf-8", "replace"))
+        if data.get("ok") and isinstance(data.get("chat_ids"), list):
+            return [str(x).strip() for x in data["chat_ids"] if str(x).strip()]
+    except Exception as e:  # noqa: BLE001
+        log("Không lấy được danh sách subscribers từ Worker: {}".format(e))
+    return []
 
 
 def prune_seen_dict(d, max_items=250):
@@ -1328,7 +1351,7 @@ def main():
     do_setup = "--setup-bot" in args
     dry_run = "--dry-run" in args
 
-    token, chat_ids, fb_rss, fb_page_id, fb_token = get_config()
+    token, admin_chat_ids, fb_rss, fb_page_id, fb_token, worker_url = get_config()
     state = load_state()
 
     if do_setup:
@@ -1437,8 +1460,13 @@ def main():
     if skipped_dupes:
         log("Đã tự động khử {} tin trùng tiêu đề chéo cổng.".format(len(skipped_dupes)))
 
-    # 4) Enrich & gửi Telegram từng thông báo mới (từ cũ đến mới để đúng thứ tự đọc)
-    can_send = bool(token and chat_ids and not dry_run)
+    # 4) Enrich & gửi Telegram từng thông báo mới (tới tất cả người dùng đã /start + Admin)
+    kv_subs = fetch_kv_subscribers(token, worker_url) if (to_notify and token and worker_url and not dry_run) else []
+    broadcast_chat_ids = list(dict.fromkeys(admin_chat_ids + kv_subs))
+    if kv_subs:
+        log("Đồng bộ danh sách nhận tin tự động: {} người dùng.".format(len(broadcast_chat_ids)))
+
+    can_send = bool(token and broadcast_chat_ids and not dry_run)
     sent_count = 0
 
     for entry in reversed(to_notify):
@@ -1449,15 +1477,17 @@ def main():
         )
 
         if can_send:
-            all_ok = True
-            for cid in chat_ids:
-                if not telegram_send(token, cid, card_text, reply_markup=markup):
-                    all_ok = False
-            if not all_ok:
+            delivered = 0
+            for cid in broadcast_chat_ids:
+                if telegram_send(token, cid, card_text, reply_markup=markup):
+                    delivered += 1
+            if delivered == 0:
                 log("Gửi thất bại cho {}#{}, sẽ thử lại chu kỳ sau.".format(it["source"], it["id"]))
                 continue
             sent_count += 1
-            log("ĐÃ GỬI [{}#{}]: {}".format(it["source"], it["id"], it["title"][:80]))
+            log("ĐÃ GỬI ({}/{} người) [{}#{}]: {}".format(
+                delivered, len(broadcast_chat_ids), it["source"], it["id"], it["title"][:80]
+            ))
         else:
             log("[DRY/NO-TOKEN] Tin mới [{}#{}]: {}".format(it["source"], it["id"], it["title"][:80]))
 
@@ -1481,16 +1511,16 @@ def main():
     if not dry_run:
         save_state(state)
 
-    # 6) Chế độ --test: chỉ gửi đúng 1 thẻ thông báo mẫu (không tự bật Menu làm trôi tin)
-    if do_test and can_send:
+    # 6) Chế độ --test: chỉ gửi đúng 1 thẻ thông báo mẫu cho Admin (không spam các user khác)
+    if do_test and token and admin_chat_ids and not dry_run:
         merged = merge_and_dedupe_items(results)
         if merged:
             latest = merged[0]
             detail = enrich_item(latest, online_home_html=online_html, online_cookie=online_cookie)
             card_text, markup = build_notification_card(latest, detail=detail, is_test=True)
-            for cid in chat_ids:
+            for cid in admin_chat_ids:
                 telegram_send(token, cid, card_text, reply_markup=markup)
-            log("Đã gửi thẻ kiểm tra tới {} chat.".format(len(chat_ids)))
+            log("Đã gửi thẻ kiểm tra tới {} chat Admin.".format(len(admin_chat_ids)))
 
 
 if __name__ == "__main__":
