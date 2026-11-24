@@ -812,13 +812,15 @@ def build_main_menu_markup():
 
 
 def build_main_menu_text():
+    now_vn = datetime.datetime.now(VN_TZ).strftime("%H:%M · %d/%m/%Y")
     return (
         "📌 <b>BẢNG ĐIỀU KHIỂN — HUB MONITOR PRO</b>\n"
         "🎓 <i>Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)</i>\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
+        "🟢 <b>Trạng thái BOT:</b> Đang hoạt động · <code>{}</code>\n"
         "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram\n\n"
         "👇 <i>Vui lòng chọn menu bên dưới:</i>"
-    )
+    ).format(now_vn)
 
 
 def build_notification_card(item, extra_sources=None, detail=None, is_test=False):

@@ -882,6 +882,7 @@ function mainMenuView() {
     "📌 <b>BẢNG ĐIỀU KHIỂN — HUB MONITOR PRO</b>",
     "🎓 <i>Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)</i>",
     "━━━━━━━━━━━━━━━━━━━━",
+    `🟢 <b>Trạng thái BOT:</b> Đang hoạt động · <code>${vnNowLabel()}</code>`,
     "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram",
     "",
     "👇 <i>Vui lòng chọn menu bên dưới:</i>",
