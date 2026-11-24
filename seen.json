@@ -13,6 +13,1324 @@
     "4792": "23/11/2026",
     "4791": "23/11/2026"
   },
-  "updated": "2026-11-24 04:24:28",
-  "telegram_offset": 63931211
+  "updated": "2026-11-24 20:47:18",
+  "telegram_offset": 63931211,
+  "sources": {
+    "online": {
+      "4787": "17/11/2026",
+      "4785": "13/11/2026",
+      "4784": "13/11/2026",
+      "4783": "12/11/2026",
+      "4782": "10/11/2026",
+      "4774": "05/11/2026",
+      "4773": "04/11/2026",
+      "4770": "02/11/2026",
+      "4768": "28/10/2026",
+      "4766": "27/10/2026",
+      "4792": "23/11/2026",
+      "4791": "23/11/2026"
+    },
+    "htttql": {
+      "231047": "09/11/2026",
+      "230917": "23/10/2026",
+      "230916": "22/10/2026",
+      "230915": "16/10/2026",
+      "230914": "14/10/2026",
+      "230913": "13/10/2026",
+      "230912": "12/10/2026",
+      "230911": "08/10/2026",
+      "230910": "08/10/2026",
+      "230909": "07/10/2026",
+      "230450": "26/09/2026",
+      "230431": "24/09/2026",
+      "230387": "19/09/2026",
+      "230490": "16/09/2026",
+      "230388": "15/09/2026",
+      "230489": "14/09/2026",
+      "230486": "04/09/2026",
+      "230485": "25/08/2026",
+      "230484": "19/08/2026",
+      "230062": "18/08/2026",
+      "230061": "10/08/2026",
+      "229992": "10/08/2026",
+      "230060": "07/08/2026",
+      "230059": "07/08/2026",
+      "230058": "06/08/2026",
+      "230057": "24/07/2026",
+      "229879": "17/07/2026",
+      "229811": "15/07/2026",
+      "229878": "08/07/2026",
+      "229876": "03/07/2026",
+      "229877": "27/06/2026",
+      "229683": "25/06/2026"
+    },
+    "htttql_ev": {
+      "229812": "19/06/2026",
+      "228969": "15/04/2026",
+      "228968": "18/12/2025",
+      "226939": "25/09/2025",
+      "226370": "02/08/2025",
+      "226369": "02/08/2025",
+      "226367": "02/08/2025",
+      "225918": "02/07/2025",
+      "223763": "02/01/2025",
+      "223764": "03/11/2024",
+      "223765": "03/10/2024",
+      "223766": "03/07/2024",
+      "223767": "12/06/2024",
+      "223768": "06/06/2024",
+      "223303": "05/06/2024",
+      "223769": "05/06/2024",
+      "223332": "29/05/2024",
+      "223770": "17/05/2024",
+      "223771": "18/01/2024",
+      "223772": "30/12/2023",
+      "223773": "11/12/2023",
+      "223774": "27/11/2023",
+      "223775": "30/10/2023",
+      "223257": "09/10/2023",
+      "223779": "24/05/2023",
+      "223780": "24/05/2023",
+      "223778": "21/05/2023",
+      "223777": "12/05/2023",
+      "223776": "17/03/2023",
+      "223781": "16/12/2022"
+    },
+    "ktdbcl": {
+      "231153": "23/11/2026",
+      "231074": "10/11/2026",
+      "231009": "03/11/2026",
+      "230952": "28/10/2026",
+      "230840": "22/10/2026",
+      "230841": "22/10/2026",
+      "230816": "22/10/2026",
+      "230614": "12/10/2026",
+      "230548": "07/10/2026",
+      "230470": "29/09/2026",
+      "230433": "25/09/2026",
+      "230391": "23/09/2026",
+      "230385": "22/09/2026",
+      "230340": "17/09/2026",
+      "230304": "16/09/2026",
+      "230241": "12/09/2026",
+      "230194": "08/09/2026",
+      "230164": "04/09/2026",
+      "230151": "03/09/2026",
+      "230129": "26/08/2026",
+      "230120": "24/08/2026",
+      "230045": "18/08/2026",
+      "229991": "10/08/2026",
+      "229965": "05/08/2026",
+      "229823": "17/07/2026",
+      "229826": "07/07/2026",
+      "229775": "07/07/2026",
+      "229647": "24/06/2026",
+      "229649": "24/06/2026",
+      "229667": "24/06/2026",
+      "229577": "15/06/2026",
+      "229483": "04/06/2026"
+    },
+    "daotao": {
+      "230260": "14/09/2026",
+      "230123": "24/08/2026",
+      "230019": "14/08/2026",
+      "230012": "13/08/2026",
+      "229994": "06/08/2026",
+      "229970": "06/08/2026",
+      "229964": "05/08/2026",
+      "229892": "27/07/2026",
+      "229809": "15/07/2026",
+      "229788": "09/07/2026",
+      "229773": "07/07/2026",
+      "229706": "29/06/2026",
+      "229691": "26/06/2026",
+      "229501": "06/06/2026",
+      "229476": "03/06/2026",
+      "229475": "03/06/2026",
+      "229338": "28/05/2026",
+      "229336": "28/05/2026",
+      "229242": "20/05/2026",
+      "229195": "15/05/2026",
+      "229194": "15/05/2026",
+      "229193": "15/05/2026",
+      "229192": "15/05/2026",
+      "229074": "29/04/2026",
+      "229029": "23/04/2026",
+      "228977": "20/04/2026",
+      "228958": "17/04/2026",
+      "228937": "16/04/2026",
+      "228876": "13/04/2026",
+      "228799": "06/04/2026",
+      "228941": "04/04/2026",
+      "228772": "03/04/2026"
+    },
+    "daotao_news": {
+      "229994": "06/08/2026",
+      "229773": "07/07/2026",
+      "228482": "16/03/2026",
+      "228407": "10/03/2026",
+      "228405": "10/03/2026",
+      "228384": "09/03/2026",
+      "228209": "02/02/2026",
+      "227620": "27/11/2025",
+      "226814": "12/09/2025",
+      "226657": "27/08/2025",
+      "226447": "06/08/2025",
+      "225889": "01/07/2025",
+      "224984": "26/06/2025",
+      "224776": "14/06/2025",
+      "226052": "28/04/2025",
+      "223084": "22/04/2025"
+    },
+    "scc": {
+      "231098": "13/11/2026",
+      "230998": "02/11/2026",
+      "230948": "28/10/2026",
+      "230920": "27/10/2026",
+      "230704": "16/10/2026",
+      "230697": "16/10/2026",
+      "230650": "14/10/2026",
+      "230617": "12/10/2026",
+      "230574": "09/10/2026",
+      "230570": "09/10/2026",
+      "230513": "02/10/2026",
+      "230422": "24/09/2026",
+      "230380": "21/09/2026",
+      "230372": "21/09/2026",
+      "230360": "18/09/2026",
+      "230334": "17/09/2026",
+      "230285": "15/09/2026",
+      "230247": "14/09/2026",
+      "230244": "14/09/2026",
+      "230215": "10/09/2026",
+      "230200": "10/09/2026",
+      "230196": "09/09/2026",
+      "230007": "12/08/2026",
+      "230002": "11/08/2026",
+      "229996": "10/08/2026",
+      "229958": "04/08/2026",
+      "229887": "27/07/2026",
+      "229886": "27/07/2026",
+      "229734": "02/07/2026",
+      "229659": "23/06/2026",
+      "229620": "20/06/2026",
+      "229564": "15/06/2026"
+    },
+    "hub": {
+      "231147": "19/11/2026",
+      "231140": "19/11/2026",
+      "231030": "06/11/2026",
+      "231048": "06/11/2026",
+      "231028": "06/11/2026",
+      "231027": "06/11/2026",
+      "231026": "06/11/2026",
+      "231024": "06/11/2026",
+      "231023": "06/11/2026",
+      "231022": "06/11/2026",
+      "230962": "29/10/2026",
+      "230876": "23/10/2026",
+      "230598": "12/10/2026",
+      "230588": "10/10/2026",
+      "230587": "10/10/2026",
+      "230566": "08/10/2026",
+      "230555": "08/10/2026",
+      "230553": "08/10/2026",
+      "230483": "30/09/2026",
+      "230462": "25/09/2026",
+      "230409": "23/09/2026",
+      "230378": "21/09/2026",
+      "230315": "17/09/2026",
+      "230314": "17/09/2026",
+      "230312": "17/09/2026",
+      "230313": "17/09/2026",
+      "230311": "17/09/2026",
+      "230289": "16/09/2026",
+      "230288": "16/09/2026",
+      "230287": "16/09/2026",
+      "230286": "16/09/2026",
+      "230290": "15/09/2026"
+    },
+    "ketoan": {
+      "230273": "10/09/2026",
+      "229960": "05/08/2026",
+      "229939": "27/07/2026",
+      "229576": "08/06/2026",
+      "229573": "28/05/2026",
+      "229572": "13/04/2026",
+      "228844": "26/03/2026",
+      "228843": "10/03/2026",
+      "228269": "10/02/2026",
+      "228274": "26/01/2026",
+      "228270": "21/01/2026",
+      "227865": "02/12/2025",
+      "227653": "25/11/2025",
+      "227290": "23/10/2025",
+      "227071": "29/09/2025",
+      "227008": "25/09/2025",
+      "226599": "21/08/2025",
+      "226153": "22/07/2025",
+      "226151": "22/07/2025",
+      "226045": "26/06/2025",
+      "224671": "16/05/2025",
+      "223080": "17/04/2025",
+      "222999": "06/03/2025",
+      "223000": "17/02/2025",
+      "223001": "20/01/2025",
+      "223002": "09/12/2024",
+      "223003": "15/11/2024",
+      "223004": "23/10/2024",
+      "223005": "19/09/2024",
+      "223006": "07/08/2024",
+      "223007": "30/07/2024",
+      "223008": "30/07/2024"
+    }
+  },
+  "seen_titles": {
+    "thu moi 50 nam hub mis ngay tro ve": {
+      "source": "htttql",
+      "date": "09/11/2026",
+      "at": "2026-11-24"
+    },
+    "lich thi ket thuc hoc phan chinh thuc cua sinh vien he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 1 dot 1 nam hoc 2026 2027": {
+      "source": "htttql",
+      "date": "23/10/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do ket qua ren luyen sinh vien hoc ky 2 nam hoc 2025 2026 lan 2": {
+      "source": "htttql",
+      "date": "22/10/2026",
+      "at": "2026-11-24"
+    },
+    "nop ho so xet hoc bong xa hoi hub nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "16/10/2026",
+      "at": "2026-11-24"
+    },
+    "cap nhat thong tin sinh vien": {
+      "source": "htttql",
+      "date": "14/10/2026",
+      "at": "2026-11-24"
+    },
+    "quy dinh trien khai cac hoat dong ho tro nguoi hoc la nguoi dan toc thieu so tai truong dai hoc ngan hang thanh pho ho chi minh": {
+      "source": "htttql",
+      "date": "13/10/2026",
+      "at": "2026-11-24"
+    },
+    "nhan ho so de nghi xet ho tro chi phi hoc tap tro cap xa hoi doi voi sinh vien he dai hoc chinh quy nam hoc 2026 2027": {
+      "source": "htttql",
+      "date": "12/10/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do danh sach sinh vien dat danh hieu sinh vien xuat sac nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "08/10/2026",
+      "at": "2026-11-24"
+    },
+    "quy che danh gia ket qua ren luyen sinh vien tai truong dai hoc ngan hang thanh pho ho chi minh": {
+      "source": "htttql",
+      "date": "08/10/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc cac lop hoc phan hoc theo nhu cau cua sinh vien dai hoc chinh quy chuan hoc ky 1 nam 2026 2027": {
+      "source": "htttql",
+      "date": "07/10/2026",
+      "at": "2026-11-24"
+    },
+    "cuoc thi e commerce export challenge hub 2026": {
+      "source": "htttql",
+      "date": "26/09/2026",
+      "at": "2026-11-24"
+    },
+    "khoa he thong thong tin quan ly to chuc gap go tan sinh vien k42 hq14": {
+      "source": "htttql",
+      "date": "24/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh danh sach vv cong nhan ds sinh vien bien che lop sinh hoat va phan cong khoa quan ly sv dai hoc chinh quy khoa 42 dai hoc chinh quy chuong trinh dao tao tieng anh ban phan khoa 14": {
+      "source": "htttql",
+      "date": "19/09/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do danh sach sinh vien nhan hoc bong ngan hang nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "16/09/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do ket qua ren luyen sinh vien hoc ky 2 nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "14/09/2026",
+      "at": "2026-11-24"
+    },
+    "nghien cuu tai lieu truoc khi tham du chuyen de huong dan quy che thi doi voi tan sinh vien trong tuan sinh hoat cong dan sinh vien dau khoa nam hoc 2026 2027": {
+      "source": "htttql",
+      "date": "04/09/2026",
+      "at": "2026-11-24"
+    },
+    "kiem tra danh gia nang luc tieng anh cong nghe thong tin dau khoa doi voi sinh vien dai hoc chinh quy khoa tuyen sinh nam 2026": {
+      "source": "htttql",
+      "date": "25/08/2026",
+      "at": "2026-11-24"
+    },
+    "ke hoach hoc hoc tap danh cho tan sinh vien dhcq chuan khoa 42 dhcq chuong trinh tabp khoa 14 ctdt dac biet khoa 3 elite class khoa 2 va quoc te song bang khoa 8 ddp08": {
+      "source": "htttql",
+      "date": "19/08/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don xoa diem i trung lich thi ket thuc hoc phan cua sinh vien dai hoc chinh quy chuan va chat luong cao hoc ky he nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "18/08/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do ket qua danh sach sinh vien nop don xin vang thi ket thuc hoc phan cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "10/08/2026",
+      "at": "2026-11-24"
+    },
+    "diem chuan trung tuyen dai hoc chinh quy nam 2026 truong dai hoc ngan hang tp ho chi minh": {
+      "source": "htttql",
+      "date": "10/08/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky khoa luan dot 5 nam 2026 doi voi dhcq chuan": {
+      "source": "htttql",
+      "date": "07/08/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc hoc phan thuc tap dot 5 nam 2026 doi voi dhcq chuan": {
+      "source": "htttql",
+      "date": "07/08/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don phuc khao bai thi ket thuc hoc phan cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "06/08/2026",
+      "at": "2026-11-24"
+    },
+    "kham suc khoe sinh vien dot 2 nam 2026": {
+      "source": "htttql",
+      "date": "24/07/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don xin vang thi ket thuc hoc phan cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "17/07/2026",
+      "at": "2026-11-24"
+    },
+    "ke hoach kham suc khoe sinh vien nam 2026": {
+      "source": "htttql",
+      "date": "15/07/2026",
+      "at": "2026-11-24"
+    },
+    "ket qua phuc khao bai thi ket thuc hoc phan cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 dot 1 nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "08/07/2026",
+      "at": "2026-11-24"
+    },
+    "dieu chinh thoi gian dang ky hoc phan hoc ky 1 nam hoc 2026 2027 danh cho sinh vien dai hoc chinh quy tieng anh ban phan chuong trinh dao tao dac biet chuong trinh tinh hoa": {
+      "source": "htttql",
+      "date": "03/07/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky lop hoc phan danh cho he dai hoc chinh quy chuan va he dai hoc vua lam vua hoc hoc ky 1 nam hoc 2026 2027": {
+      "source": "htttql",
+      "date": "27/06/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don xoa diem i ky thi ket thuc hoc phan cua sinh vien dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "htttql",
+      "date": "25/06/2026",
+      "at": "2026-11-24"
+    },
+    "toa dam nghien cuu khoa hoc khoi goi dam me nghien cuu khoa hoc cho sinh vien": {
+      "source": "htttql_ev",
+      "date": "19/06/2026",
+      "at": "2026-11-24"
+    },
+    "ung dung tri tue nhan tao toi uu cong viec quan tri doanh nghiep thuong mai dien tu": {
+      "source": "htttql_ev",
+      "date": "15/04/2026",
+      "at": "2026-11-24"
+    },
+    "mo hinh phat trien cac he thong thuong mai dien tu trong ky nguyen ai": {
+      "source": "htttql_ev",
+      "date": "18/12/2025",
+      "at": "2026-11-24"
+    },
+    "toa dam khoa hoc bat nhip xu huong mo rong xuat khau qua thuong mai dien tu": {
+      "source": "htttql_ev",
+      "date": "25/09/2025",
+      "at": "2026-11-24"
+    },
+    "hoi dong bao ve de tai nghien cuu khoa hoc sinh vien 2025 khoa he thong thong tin quan ly": {
+      "source": "htttql_ev",
+      "date": "02/08/2025",
+      "at": "2026-11-24"
+    },
+    "toa dam khoa hoc esg 2025 moi truong xa hoi quan tri doanh nghiep": {
+      "source": "htttql_ev",
+      "date": "02/08/2025",
+      "at": "2026-11-24"
+    },
+    "hoi dong bao ve khoa luan tot nghiep": {
+      "source": "htttql_ev",
+      "date": "02/08/2025",
+      "at": "2026-11-24"
+    },
+    "sinh vien khoa htttql gianh giai nhat cuoc thi tai nang khoi nghiep sang tao 2025 to chuc tai dai hoc uef": {
+      "source": "htttql_ev",
+      "date": "02/07/2025",
+      "at": "2026-11-24"
+    },
+    "recap toa dam nghien cuu khoa hoc tu y tuong den nghien cuu": {
+      "source": "htttql_ev",
+      "date": "02/01/2025",
+      "at": "2026-11-24"
+    },
+    "toa dam mo nganh thuong mai dien tu": {
+      "source": "htttql_ev",
+      "date": "03/11/2024",
+      "at": "2026-11-24"
+    },
+    "chuong trinh chao don tan sinh vien k40 khoa he thong thong tin quan ly": {
+      "source": "htttql_ev",
+      "date": "03/10/2024",
+      "at": "2026-11-24"
+    },
+    "tong ket buoi toa dam ngon ngu lap trinh trong giang day va phat trien ung dung": {
+      "source": "htttql_ev",
+      "date": "03/07/2024",
+      "at": "2026-11-24"
+    },
+    "trao doi co hoi hop tac dao tao ve blockchain giua truong dai hoc ngan hang tp ho chi minh va hoc vien emurgo": {
+      "source": "htttql_ev",
+      "date": "12/06/2024",
+      "at": "2026-11-24"
+    },
+    "hub trao doi hop tac cung hiep hoi thuong mai dien tu viet nam vecom": {
+      "source": "htttql_ev",
+      "date": "06/06/2024",
+      "at": "2026-11-24"
+    },
+    "video bao cao tong ket hoat dong cua doan khoa he thong thong tin quan ly nhiem ky 2022 2024": {
+      "source": "htttql_ev",
+      "date": "05/06/2024",
+      "at": "2026-11-24"
+    },
+    "tong ket lai dem cong dien hoi dien van nghe truyen thong hub 2024": {
+      "source": "htttql_ev",
+      "date": "05/06/2024",
+      "at": "2026-11-24"
+    },
+    "chuong trinh le tuyen duong sinh vien 5 tot cap lien chi hoi cap truong nam hoc 2022 2023 khoa he thong thong tin quan ly": {
+      "source": "htttql_ev",
+      "date": "29/05/2024",
+      "at": "2026-11-24"
+    },
+    "khoa htttql to chuc tham quan doanh nghiep cho sinh vien": {
+      "source": "htttql_ev",
+      "date": "17/05/2024",
+      "at": "2026-11-24"
+    },
+    "toa dam khoa hoc martech xu huong moi cua truyen thong toan cau": {
+      "source": "htttql_ev",
+      "date": "18/01/2024",
+      "at": "2026-11-24"
+    },
+    "workshop phuong phap tiep can lien nganh trong nghien cuu khoa hoc": {
+      "source": "htttql_ev",
+      "date": "30/12/2023",
+      "at": "2026-11-24"
+    },
+    "toa dam chuyen doi so cho nong nghiep viet nam": {
+      "source": "htttql_ev",
+      "date": "11/12/2023",
+      "at": "2026-11-24"
+    },
+    "bao cao chuyen de thuc tien trien khai erp tai viet nam": {
+      "source": "htttql_ev",
+      "date": "27/11/2023",
+      "at": "2026-11-24"
+    },
+    "phat dong cuoc thi viet sac mau ky uc": {
+      "source": "htttql_ev",
+      "date": "30/10/2023",
+      "at": "2026-11-24"
+    },
+    "seminar buoi toa dam mo hinh hoc sau va ung dung trong du bao": {
+      "source": "htttql_ev",
+      "date": "09/10/2023",
+      "at": "2026-11-24"
+    },
+    "le ky ket mou voi cong ty tnhh he thong thong tin fpt fpt is": {
+      "source": "htttql_ev",
+      "date": "24/05/2023",
+      "at": "2026-11-24"
+    },
+    "le ky ket mou voi cong ty tnhh mediastep software vietnam": {
+      "source": "htttql_ev",
+      "date": "24/05/2023",
+      "at": "2026-11-24"
+    },
+    "hoi thao truyen lua thuong mai dien tu xuyen bien gioi": {
+      "source": "htttql_ev",
+      "date": "21/05/2023",
+      "at": "2026-11-24"
+    },
+    "toa dam he thong quan tri du lieu doanh nghiep": {
+      "source": "htttql_ev",
+      "date": "12/05/2023",
+      "at": "2026-11-24"
+    },
+    "toa dam thuong mai dien tu da kenh xu huong va cach tiep can": {
+      "source": "htttql_ev",
+      "date": "17/03/2023",
+      "at": "2026-11-24"
+    },
+    "hoi thao khoa hoc hoc tap va nghien cuu he thong thong tin quan ly lan thu hai lrmis2022": {
+      "source": "htttql_ev",
+      "date": "16/12/2022",
+      "at": "2026-11-24"
+    },
+    "lich thi ket thuc hoc phan chinh thuc cua sinh vien he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 1 dot 2 nam hoc 2026 2027": {
+      "source": "ktdbcl",
+      "date": "23/11/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don xin vang thi ket thuc hoc phan cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 1 dot 1 nam hoc 2026 2027": {
+      "source": "ktdbcl",
+      "date": "10/11/2026",
+      "at": "2026-11-24"
+    },
+    "v v tra cuu ket qua danh gia nang luc tieng anh cong nghe thong tin dau khoa sinh vien dai hoc chinh quy khoa tuyen sinh nam 2026 va nhan don phuc khao": {
+      "source": "ktdbcl",
+      "date": "03/11/2026",
+      "at": "2026-11-24"
+    },
+    "ket qua phuc khao thuc tap cuoi khoa cua he dai hoc chinh quy chuan hoc ky 2 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "28/10/2026",
+      "at": "2026-11-24"
+    },
+    "cac lop hoc phan nop bai thi ket thuc hoc phan tren he thong exam hub edu vn hoc ky 1 dot 1 nam hoc 2026 2027": {
+      "source": "ktdbcl",
+      "date": "22/10/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don xoa diem i trung lich thi ket thuc hoc phan cua sinh vien dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 1 dot 1 nam hoc 2026 2027": {
+      "source": "ktdbcl",
+      "date": "22/10/2026",
+      "at": "2026-11-24"
+    },
+    "ket qua phuc khao bai thi ket thuc hoc phan cua he dai hoc chinh quy chuan va chat luong cao hoc ky he nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "12/10/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don xoa diem i mon giao duc the chat cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 1 nam hoc 2026 2027": {
+      "source": "ktdbcl",
+      "date": "07/10/2026",
+      "at": "2026-11-24"
+    },
+    "kiem tra ho so thi cap chung chi ung dung cong nghe thong tin co ban cho tan sinh vien dai hoc chinh quy khoa tuyen sinh nam 2026": {
+      "source": "ktdbcl",
+      "date": "29/09/2026",
+      "at": "2026-11-24"
+    },
+    "ket qua phuc khao bai thi ket thuc hoc phan cua he dao tao tu xa hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "25/09/2026",
+      "at": "2026-11-24"
+    },
+    "lich thi phong thi kiem tra danh gia nang luc tin hoc dau khoa sinh vien dai hoc chinh quy khoa tuyen sinh nam 2026": {
+      "source": "ktdbcl",
+      "date": "23/09/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don phuc khao bai thi ket thuc hoc phan cua he dai hoc chinh quy chuan va chat luong cao hoc ky he nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "22/09/2026",
+      "at": "2026-11-24"
+    },
+    "huong dan tham du kiem tra tieng anh dau khoa": {
+      "source": "ktdbcl",
+      "date": "17/09/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do ket qua danh sach sinh vien nop don xin vang thi ket thuc hoc phan cua he dai hoc chinh quy chuan va chat luong cao hoc ky he nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "16/09/2026",
+      "at": "2026-11-24"
+    },
+    "lich thi phong thi kiem tra danh gia nang luc tieng anh dau khoa sinh vien dai hoc chinh quy khoa tuyen sinh nam 2026": {
+      "source": "ktdbcl",
+      "date": "12/09/2026",
+      "at": "2026-11-24"
+    },
+    "danh sach sinh vien vi pham quy che thi ket thuc hoc phan cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "08/09/2026",
+      "at": "2026-11-24"
+    },
+    "nhan don xin vang thi ket thuc hoc phan cua he dai hoc chinh quy chuan va chat luong cao hoc ky he nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "04/09/2026",
+      "at": "2026-11-24"
+    },
+    "ket qua phuc khao bai thi ket thuc hoc phan cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "26/08/2026",
+      "at": "2026-11-24"
+    },
+    "ket qua phuc khao bai thi ket thuc hoc phan cua he dao tao tu xa hoc ky 2 dot 1 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "07/07/2026",
+      "at": "2026-11-24"
+    },
+    "lich thi ket thuc hoc phan chinh thuc cua sinh vien he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "24/06/2026",
+      "at": "2026-11-24"
+    },
+    "lich thi ket thuc hoc phan chinh thuc mon giao duc the chat cua sinh vien he dai hoc chinh quy chuan va chat luong cao hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "24/06/2026",
+      "at": "2026-11-24"
+    },
+    "cac lop hoc phan nop bai thi ket thuc hoc phan tren he thong exam hub edu vn hoc ky 2 dot 2 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "15/06/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do ket qua danh sach sinh vien nop don xin vang thi ket thuc hoc phan cua he dai hoc chinh quy chuan chat luong cao va quoc te song bang hoc ky 2 dot 1 nam hoc 2025 2026": {
+      "source": "ktdbcl",
+      "date": "04/06/2026",
+      "at": "2026-11-24"
+    },
+    "1623 tb dhnh ngay 14 09 2026 thong bao xet tot nghiep dai hoc chinh quy van bang 2 chinh quy chuong trinh chinh quy chat luong cao vua lam vua hoc dot thang 10 nam 2026": {
+      "source": "daotao",
+      "date": "14/09/2026",
+      "at": "2026-11-24"
+    },
+    "1494 tb dhnh ngay 24 08 2026 v v thong bao ve viec phat bang tot nghiep bac dai hoc dot xet thang 6 nam 2026": {
+      "source": "daotao",
+      "date": "24/08/2026",
+      "at": "2026-11-24"
+    },
+    "tam ngung tiep nhan lien he cong tac ngay 14 08 2026": {
+      "source": "daotao",
+      "date": "14/08/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky hoc ghep doi voi sinh vien he dai hoc chinh quy chua hoan thanh tuan sinh hoat cong dan sinh vien dau khoa": {
+      "source": "daotao",
+      "date": "13/08/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky thuc hien khoa luan tot nghiep doi voi he dai hoc chinh quy chuan dot 5 nam hoc 2024 2025": {
+      "source": "daotao",
+      "date": "06/08/2026",
+      "at": "2026-11-24"
+    },
+    "1364 tb dhnh ngay 05 08 2026 v v thong bao dang ky thuc hien khoa luan tot nghiep doi voi he dai hoc chinh quy chuan dot 5 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "06/08/2026",
+      "at": "2026-11-24"
+    },
+    "1353 tb dhnh ngay 04 08 2026 ve viec thong bao dong hoc phi he dhcq chuong trinh tieng anh ban phan clc chuong trinh dao tao dac biet chuong trinh tinh hoa he dhcq chuan he vlvh hoc ky 1 nam hoc 2026 2027 va hoan thanh cong no hoc phi": {
+      "source": "daotao",
+      "date": "05/08/2026",
+      "at": "2026-11-24"
+    },
+    "xet cong nhan tot nghiep dai hoc chinh quy van bang 2 chinh quy chuong trinh chinh quy chat luong cao vua lam vua hoc dot thang 8 nam 2026": {
+      "source": "daotao",
+      "date": "27/07/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc thuc hien hoc phan do an nganh he thong thong tin quan ly hoc ky he nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "15/07/2026",
+      "at": "2026-11-24"
+    },
+    "tam ngung tiep nhan lien he cong tac ngay 10 07 2026": {
+      "source": "daotao",
+      "date": "09/07/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc thuc hien hoc phan thuc tap cuoi khoa dot 4 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "07/07/2026",
+      "at": "2026-11-24"
+    },
+    "lich giang hoc ky 1 nam hoc 2026 2027 du kien": {
+      "source": "daotao",
+      "date": "29/06/2026",
+      "at": "2026-11-24"
+    },
+    "144 tb dhnh p qldt ngay 06 thang 6 nam 2026 v v mo cac lop hoc phan theo nhu cau hoc cua sinh vien trong hoc ky he nam hoc 2025 2026 doi voi dai hoc chinh quy chuan": {
+      "source": "daotao",
+      "date": "06/06/2026",
+      "at": "2026-11-24"
+    },
+    "dieu chinh thoi gian thuc hien khoa luan tot nghiep doi voi he dai hoc chinh quy chuan dot 4 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "03/06/2026",
+      "at": "2026-11-24"
+    },
+    "dieu chinh thoi gian thuc tap cuoi khoa doi voi he dai hoc chinh quy chuan dot 4 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "03/06/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky thuc hien khoa luan tot nghiep doi voi he dai hoc chinh quy chuan dot 4 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "28/05/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc hoc phan thuc tap cuoi khoa doi voi he dai hoc chinh quy chuan dot 4 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "28/05/2026",
+      "at": "2026-11-24"
+    },
+    "phat giay chung nhan ket qua thi danh gia dau vao dai hoc tren may tinh danh cho hoc sinh thpt vsat": {
+      "source": "daotao",
+      "date": "20/05/2026",
+      "at": "2026-11-24"
+    },
+    "723 tb dhnh thong bao v v xet cong nhan tot nghiep dai hoc chinh quy van bang 2 chinh quy chuong trinh chinh quy chat luong cao vua lam vua hoc dot thang 06 nam 2026": {
+      "source": "daotao",
+      "date": "15/05/2026",
+      "at": "2026-11-24"
+    },
+    "563 26 ve viec phat bang tot nghiep bac dai hoc dot xet thang 03 nam 2026": {
+      "source": "daotao",
+      "date": "15/05/2026",
+      "at": "2026-11-24"
+    },
+    "cap nhat phu luc chuan ngoai ngu chuan cong nghe thong tin trinh do dao tao dai hoc tai truong dai hoc ngan hang tp hcm": {
+      "source": "daotao",
+      "date": "15/05/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc cac hoat dong giang day hoc tap hoc ky he nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "15/05/2026",
+      "at": "2026-11-24"
+    },
+    "cua hieu truong truong dai hoc ngan hang tp hcm ve viec dieu chinh lich giang he dhcq chuan dhcq tieng anh ban phan dhcq chuong trinh dao tao dac biet ngay 15 va 16 5 2026": {
+      "source": "daotao",
+      "date": "29/04/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc xet phan chuyen nganh dao tao doi voi sinh vien dai hoc chinh quy khoa 41": {
+      "source": "daotao",
+      "date": "23/04/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc le trao bang tot nghiep tien si thac si cu nhan dot 1 nam 2026": {
+      "source": "daotao",
+      "date": "20/04/2026",
+      "at": "2026-11-24"
+    },
+    "phong ngua cac phuong thuc thu doan lua dao bat coc sinh vien qua mang": {
+      "source": "daotao",
+      "date": "17/04/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc thuc hien hoc phan thuc tap cuoi khoa dot 3 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "16/04/2026",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi lop hoc phan theo nhu cau sinh vien he dai hoc chinh quy chuong trinh tieng anh ban phan chuong trinh dac biet he dai hoc chinh quy chuan hoc ky 2 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "13/04/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc thuc hien hoc phan kien tap nganh he thong thong tin quan ly hoc ky 2 nam hoc 2025 2026": {
+      "source": "daotao",
+      "date": "06/04/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh 895 ngay 04 thang 04 nam 2025 ve viec ban hanh quy dinh chuan ngoai ngu trinh do dai hoc tai truong ngan hang tp hcm": {
+      "source": "daotao",
+      "date": "04/04/2026",
+      "at": "2026-11-24"
+    },
+    "dieu chinh lich giang he dhcq chuan dhcq tieng anh ban phan dhcq ct dao tao dac biet chuong trinh elite class sang ngay 09 4 2026": {
+      "source": "daotao",
+      "date": "03/04/2026",
+      "at": "2026-11-24"
+    },
+    "thuc hien thuc tap cuoi khoa doi voi he dai hoc chinh quy chuong trinh tieng anh ban phan dot 3 nh 2025 2026": {
+      "source": "daotao_news",
+      "date": "16/03/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky thuc hien khoa luan tot nghiep doi voi he dai hoc chinh quy chuan dot 3 nam 2025 2026": {
+      "source": "daotao_news",
+      "date": "10/03/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc hoc phan thuc tap cuoi khoa doi voi he dai hoc chinh quy chuan dot 3 nam hoc 2025 2026": {
+      "source": "daotao_news",
+      "date": "10/03/2026",
+      "at": "2026-11-24"
+    },
+    "164 tb dhnh thong bao v v xet cong nhan tot nghiep dai hoc chinh quy van bang 2 chinh quy chuong trinh chinh quy chat luong cao vua lam vua hoc dot thang 03 nam 2026": {
+      "source": "daotao_news",
+      "date": "09/03/2026",
+      "at": "2026-11-24"
+    },
+    "phat bang tot nghiep bac dai hoc dot xet thang 12 nam 2025": {
+      "source": "daotao_news",
+      "date": "02/02/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc hoc phan thuc tap cuoi khoa doi voi he dai hoc chinh quy chuan dot 2 nam hoc 2025 2026": {
+      "source": "daotao_news",
+      "date": "27/11/2025",
+      "at": "2026-11-24"
+    },
+    "cam nang sinh vien nam hoc 2025 2026": {
+      "source": "daotao_news",
+      "date": "12/09/2025",
+      "at": "2026-11-24"
+    },
+    "ke hoach so 1264 kh dhnh ngay 19 8 2025 ve viec hoc tap danh cho sinh vien dai hoc chinh quy chuan nam hoc 2025 2026": {
+      "source": "daotao_news",
+      "date": "27/08/2025",
+      "at": "2026-11-24"
+    },
+    "canh bao cac thu doan lua dao bat coc sinh vien qua mang": {
+      "source": "daotao_news",
+      "date": "06/08/2025",
+      "at": "2026-11-24"
+    },
+    "v v thong tin dia chi tru so chinh va cac co so cua truong dai hoc ngan hang tp hcm sau quyet dinh cua trung uong va dia phuong ve sap nhap don vi hanh chinh": {
+      "source": "daotao_news",
+      "date": "01/07/2025",
+      "at": "2026-11-24"
+    },
+    "ve co hoi nhan hoc bong chuong trinh thac si eabm tai dai hoc zurich thuy si": {
+      "source": "daotao_news",
+      "date": "26/06/2025",
+      "at": "2026-11-24"
+    },
+    "tham gia cuoc thi acca virtual finhack 2025 quy mo khu vuc dong nam a luc dia": {
+      "source": "daotao_news",
+      "date": "14/06/2025",
+      "at": "2026-11-24"
+    },
+    "tuyen dung cong tac vien ho tro cong tac tuyen sinh nam 2025": {
+      "source": "daotao_news",
+      "date": "28/04/2025",
+      "at": "2026-11-24"
+    },
+    "to chuc le trao bang tot nghiep tien si thac si cu nhan thang 5 nam 2025": {
+      "source": "daotao_news",
+      "date": "22/04/2025",
+      "at": "2026-11-24"
+    },
+    "cap nhat thong tin sinh vien ngoai tru hoc ky 1 nam hoc 2026 2027": {
+      "source": "scc",
+      "date": "13/11/2026",
+      "at": "2026-11-24"
+    },
+    "huy dong sinh vien tham gia chuong trinh le ky niem ngay nha giao viet nam 20 11 2026": {
+      "source": "scc",
+      "date": "02/11/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky tu van ho tro cac truong hop dac biet": {
+      "source": "scc",
+      "date": "28/10/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky tham gia workshop ung dung ai trong chuan bi nghe nghiep tu cv den phong van va tim viec": {
+      "source": "scc",
+      "date": "27/10/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh v v cong nhan ket qua bai thu hoach ket thuc tuan sinh hoat cong dan sinh vien dau khoa nam hoc 2026 2027": {
+      "source": "scc",
+      "date": "16/10/2026",
+      "at": "2026-11-24"
+    },
+    "nop cac giay to con thieu trong ho so nhap hoc doi voi sinh vien dai hoc chinh quy": {
+      "source": "scc",
+      "date": "09/10/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do ket qua bai thu hoach tuan sinh hoat cong dan sinh vien dau khoa nam hoc 2026 2027": {
+      "source": "scc",
+      "date": "02/10/2026",
+      "at": "2026-11-24"
+    },
+    "khao sat y kien giao vien giang vien sinh vien ve nhu cau boi duong nghiep vu su pham ve giao duc hoa nhap": {
+      "source": "scc",
+      "date": "24/09/2026",
+      "at": "2026-11-24"
+    },
+    "vv tham gia chuong trinh truyen thong giao duc cham soc suc khoe tinh duc va suc khoe sinh san skss cho sinh vien voi chu de chon an toan tron cuoc vui": {
+      "source": "scc",
+      "date": "21/09/2026",
+      "at": "2026-11-24"
+    },
+    "huong dan lam bai kiem tra ket thuc tuan sinh hoat cong dan sinh vien dau khoa tren lms hub dang lan 2": {
+      "source": "scc",
+      "date": "21/09/2026",
+      "at": "2026-11-24"
+    },
+    "chuong trinh hoc bong future vpbanker 2026": {
+      "source": "scc",
+      "date": "18/09/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do danh sach sinh vien du kien nhan hoc bong ngan hang nam hoc 2025 2026 lan 2": {
+      "source": "scc",
+      "date": "17/09/2026",
+      "at": "2026-11-24"
+    },
+    "huong dan lam bai kiem tra ket thuc tuan sinh hoat cong dan sinh vien dau khoa tren lms hub": {
+      "source": "scc",
+      "date": "14/09/2026",
+      "at": "2026-11-24"
+    },
+    "nhan ho so de nghi xet mien giam hoc phi doi voi sinh vien he dai hoc chinh quy nam hoc 2026 2027": {
+      "source": "scc",
+      "date": "10/09/2026",
+      "at": "2026-11-24"
+    },
+    "le phat dong cuoc thi rongviet invest 2026 va workshop dau tu thong minh nhan dien rui ro trong ky nguyen so": {
+      "source": "scc",
+      "date": "10/09/2026",
+      "at": "2026-11-24"
+    },
+    "chuong trinh hoc bong cua quy kien tao cuu long": {
+      "source": "scc",
+      "date": "09/09/2026",
+      "at": "2026-11-24"
+    },
+    "volunteer call for education for all project": {
+      "source": "scc",
+      "date": "11/08/2026",
+      "at": "2026-11-24"
+    },
+    "cuoc thi rongviet invest 2026": {
+      "source": "scc",
+      "date": "10/08/2026",
+      "at": "2026-11-24"
+    },
+    "chuong trinh hoc bong the best of mb chasing 2026": {
+      "source": "scc",
+      "date": "04/08/2026",
+      "at": "2026-11-24"
+    },
+    "trien lam quoc te vietbuild ho chi minh 2026 lan ii": {
+      "source": "scc",
+      "date": "27/07/2026",
+      "at": "2026-11-24"
+    },
+    "nhan ho so xet hoc bong thinh tri thanh tai cung cathay lan thu 19 nam 2026": {
+      "source": "scc",
+      "date": "02/07/2026",
+      "at": "2026-11-24"
+    },
+    "bo tri thoi gian sinh hoat lop dinh ky dot 2 hoc ky 2 nam hoc 2025 2026": {
+      "source": "scc",
+      "date": "23/06/2026",
+      "at": "2026-11-24"
+    },
+    "dang ky o ky tuc xa hoc thang 7 nam hoc 2025 2026": {
+      "source": "scc",
+      "date": "20/06/2026",
+      "at": "2026-11-24"
+    },
+    "kiem do ket qua ren luyen sinh vien va bo sung cac hoat dong ngoai truong hoc ky 2 nam hoc 2025 2026 dieu chinh thoi gian": {
+      "source": "scc",
+      "date": "15/06/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc le trao bang tot nghiep tien si thac si cu nhan dot 2": {
+      "source": "hub",
+      "date": "19/11/2026",
+      "at": "2026-11-24"
+    },
+    "xet cong nhan tot nghiep dai hoc chinh quy van bang 2 chinh quy chuong trinh chinh quy chat luong cao vua lam vua hoc dot thang 12 nam 2026": {
+      "source": "hub",
+      "date": "19/11/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan du dieu kien chuan dau ra tieng anh doi voi sinh vien dai hoc chinh qui nop dot thang 10 nam 2026": {
+      "source": "hub",
+      "date": "06/11/2026",
+      "at": "2026-11-24"
+    },
+    "nop tien bao hiem y te sinh vien nam 2 3 4 nam hoc 2026 2027": {
+      "source": "hub",
+      "date": "06/11/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan sinh vien dhcq chuan du dieu kien thuc hien khoa luan dot 2 nam 2026 2027": {
+      "source": "hub",
+      "date": "06/11/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan du dieu kien hoc anh van chuyen nganh doi voi sinh vien dai hoc chinh quy dot thang 10 nam 2026": {
+      "source": "hub",
+      "date": "06/11/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan du dieu kien chuan ngoai ngu trong qua trinh hoc doi voi sinh vien dhcq chuan tu khoa 40 tro ve sau dot thang 10 nam 2026": {
+      "source": "hub",
+      "date": "06/11/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan du dieu kien dat chuan cong nghe thong tin dau vao hinh thuc dai hoc chinh quy nop dot thang 10 nam 2026": {
+      "source": "hub",
+      "date": "06/11/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan dat chuan cong nghe thong tin trong qua trinh hoc chuan dau ra doi voi sinh vien dai hoc chinh quy tu khoa 39 tro ve truoc nop dot thang 10 2026": {
+      "source": "hub",
+      "date": "06/11/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan dat chuan cong nghe thong tin trong qua trinh hoc dieu kien hoc tin hoc ung dung hinh thuc dai hoc chinh quy tu khoa 40 tro di nop dot thang 10 nam 2026": {
+      "source": "hub",
+      "date": "06/11/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec canh bao hoc vu doi voi sinh vien he dao tao tu xa dot xet hoc ky 2 nam hoc 2025 2026": {
+      "source": "hub",
+      "date": "29/10/2026",
+      "at": "2026-11-24"
+    },
+    "tuyen dung nhan su truong dai hoc ngan hang thanh pho ho chi minh": {
+      "source": "hub",
+      "date": "23/10/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan dat chuan cong nghe thong tin trong qua trinh hoc chuan dau ra doi voi sinh vien dai hoc chinh quy tu khoa 39 tro ve truoc nop dot thang 9 2026": {
+      "source": "hub",
+      "date": "10/10/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan du dieu kien dat chuan cong nghe thong tin dau vao hinh thuc dai hoc chinh quy nop dot thang 9 nam 2026": {
+      "source": "hub",
+      "date": "10/10/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan du dieu kien chuan dau ra tieng anh doi voi sinh vien dai hoc chinh quy nop dot thang 9 nam 2026": {
+      "source": "hub",
+      "date": "08/10/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan du dieu kien hoc anh van chuyen nganh doi voi sinh vien dhcq dot thang 9 nam 2026": {
+      "source": "hub",
+      "date": "08/10/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec cong nhan du dieu kien chuan ngoai ngu trong qua trinh hoc doi voi sinh vien dhcq chuan tu khoa 40 tro ve sau dot thang 9 2026": {
+      "source": "hub",
+      "date": "08/10/2026",
+      "at": "2026-11-24"
+    },
+    "ve chuong trinh trao doi sinh vien voi truong kinh doanh esb duc": {
+      "source": "hub",
+      "date": "25/09/2026",
+      "at": "2026-11-24"
+    },
+    "thu hoc phi hoc ky 1 nam hoc 2026 2027 doi voi hoc vien sau dai hoc": {
+      "source": "hub",
+      "date": "23/09/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc thi cap chung chi ung dung cong nghe thong tin ky thi ngay 18 thang 10 nam 2026": {
+      "source": "hub",
+      "date": "21/09/2026",
+      "at": "2026-11-24"
+    },
+    "sinh vien du dieu kien tham gia thuc hien hoc phan do an nganh he thong thong tin quan ly hoc ky 1 nam hoc 2026 2027 bo sung": {
+      "source": "hub",
+      "date": "17/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan sinh vien dai hoc chinh quy du dieu kien thuc hien khoa luan tot nghiep dot 5 nam hoc 2025 2026": {
+      "source": "hub",
+      "date": "17/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan sinh vien dai hoc vua lam vua hoc va van bang 2 vua lam vua hoc du dieu kien chuan dau ra ngoai ngu 2 dot thang 8 nam 2026 theo file dinh kem": {
+      "source": "hub",
+      "date": "17/09/2026",
+      "at": "2026-11-24"
+    },
+    "nop khoa luan tot nghiep hinh thuc dai hoc chinh quy tieng anh ban phan dot 4 nam hoc 2025 2026": {
+      "source": "hub",
+      "date": "17/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan sinh vien van bang 2 vua lam vua hoc du dieu kien chuan dau ra tieng anh dot thang 8 nam 2026 theo file dinh kem": {
+      "source": "hub",
+      "date": "17/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan dat chuan cong nghe thong tin trong qua trinh hoc chuan dau ra doi voi sinh vien dhcq tu khoa 39 tro ve truoc nop dot thang 8 2026 theo file dinh kem": {
+      "source": "hub",
+      "date": "16/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan dat chuan cong nghe thong tin trong qua trinh hoc dieu kien hoc tin hoc ung dung dhcq tu khoa 40 tro di nop dot thang 8 2026 theo file dinh kem": {
+      "source": "hub",
+      "date": "16/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan du dieu kien dat chuan dau ra tieng anh doi voi sinh vien dhcq nop dot thang 8 2026 theo file dinh kem": {
+      "source": "hub",
+      "date": "16/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh cong nhan du dieu kien dat chuan cong nghe thong tin dau vao dhcq nop dot thang 8 2026 theo file dinh kem": {
+      "source": "hub",
+      "date": "16/09/2026",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ban hanh quy che to chuc va quan ly dao tao trinh do dai hoc tai truong dai hoc ngan hang thanh pho ho chi minh": {
+      "source": "hub",
+      "date": "15/09/2026",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dhcq quoc te song bang hoc ky 1 nam hoc 2026 2027 va hoan thanh cong no hoc phi": {
+      "source": "ketoan",
+      "date": "10/09/2026",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dhcq chuong trinh tieng anh ban phan clc chuong trinh dao tao dac biet chuong trinh tinh hoa he dhcq chuan he vlvh hoc ky 1 nam hoc 2026 2027 va hoan thanh cong no hoc phi": {
+      "source": "ketoan",
+      "date": "05/08/2026",
+      "at": "2026-11-24"
+    },
+    "to chuc cac lop hoc phan hoc theo nhu cau cua sinh vien dai hoc chinh quy chuan hoc ky 2 nam 2025 2026": {
+      "source": "ketoan",
+      "date": "26/03/2026",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dhcq quoc te song bang hoc ky 2 nam hoc 2025 2026 va hoan thanh cong no hoc phi hop thu den": {
+      "source": "ketoan",
+      "date": "10/02/2026",
+      "at": "2026-11-24"
+    },
+    "thu hoc phi hk2 nam hoc 2025 2026 doi voi hoc vien sau dai hoc": {
+      "source": "ketoan",
+      "date": "26/01/2026",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dhcq quoc te song bang hoc ky 2 nam hoc 2025 2026 va hoan thanh cong no hoc phi": {
+      "source": "ketoan",
+      "date": "21/01/2026",
+      "at": "2026-11-24"
+    },
+    "phat bang tot nghiep bac dai hoc xet thang 10 nam 2025": {
+      "source": "ketoan",
+      "date": "02/12/2025",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dhcq ct tabp clc ct dt dac biet he dhcq chuan he vlvh hoc ky 2 nam hoc 2025 2026 va hoan thanh cong no hoc phi 10 12 26 11 2025": {
+      "source": "ketoan",
+      "date": "25/11/2025",
+      "at": "2026-11-24"
+    },
+    "dong bo sung hoc phi he dai hoc chinh quy k41 dhcq chuong trinh elite class dh tabp clc k13 hoc ky 01 nam hoc 2025 2026": {
+      "source": "ketoan",
+      "date": "23/10/2025",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi hoc ky 1 nam hoc 2025 2026 he chinh quy quoc te song bang": {
+      "source": "ketoan",
+      "date": "29/09/2025",
+      "at": "2026-11-24"
+    },
+    "to chuc cac lop hoc phan hoc theo nhu cau cua sinh vien dai hoc chinh quy chuan hoc ky 1 nam 2025 2026": {
+      "source": "ketoan",
+      "date": "25/09/2025",
+      "at": "2026-11-24"
+    },
+    "thu hoc phi hk1 nam hoc 2025 2026 doi voi hoc vien sau dai hoc": {
+      "source": "ketoan",
+      "date": "21/08/2025",
+      "at": "2026-11-24"
+    },
+    "quyet dinh ve viec muc thu hoc phi phi dich vu nam hoc 2025 2026": {
+      "source": "ketoan",
+      "date": "22/07/2025",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dai hoc chinh quy chuong trinh tieng anh ban phan clc chuong trinh dao tao dac biet he dai hoc chinh quy chuan he vua lam vua hoc hoc ky 1 nam hoc 2025 2026 va hoan thanh cong no hoc phi theo file dinh kem": {
+      "source": "ketoan",
+      "date": "22/07/2025",
+      "at": "2026-11-24"
+    },
+    "dang ky lop hoc phan danh cho he dhcq chuan va he dh vlvh hoc ky 1 nh 2025 2026": {
+      "source": "ketoan",
+      "date": "26/06/2025",
+      "at": "2026-11-24"
+    },
+    "to chuc cac hoat dong giang day hoc tap hoc ky he nam hoc 2024 2025 announcement on the organization of teaching and learning activities for the summer semester academic year 2024 2025": {
+      "source": "ketoan",
+      "date": "16/05/2025",
+      "at": "2026-11-24"
+    },
+    "to chuc lop hoc phan hoc theo nhu cau cua sinh vien dai hoc chinh quy chuan hoc ky 2 nam hoc 2024 2025": {
+      "source": "ketoan",
+      "date": "06/03/2025",
+      "at": "2026-11-24"
+    },
+    "phat bang tot nghiep bac dai hoc dot xet thang 12 nam 2024": {
+      "source": "ketoan",
+      "date": "17/02/2025",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dai hoc chinh quy quoc te song bang hk2 nam hoc 2024 2025 va hoan thanh cong no hoc phi": {
+      "source": "ketoan",
+      "date": "20/01/2025",
+      "at": "2026-11-24"
+    },
+    "dieu chinh thoi gian dong hoc phi he dhcq ct tabp clc hk2 nh 2024 2025 va hoan thanh cong no hp": {
+      "source": "ketoan",
+      "date": "09/12/2024",
+      "at": "2026-11-24"
+    },
+    "dieu chinh thoi gian to chuc le tot nghiep cu nhan thang 12 2024": {
+      "source": "ketoan",
+      "date": "15/11/2024",
+      "at": "2026-11-24"
+    },
+    "hoc giao duc quoc phong an ninh doi voi he dai hoc chinh quy chuan khoa 40 dhcq chuong trinh tieng anh ban phan clc chuong trinh dao tao dac biet khoa 12 va quoc te song bang khoa 6": {
+      "source": "ketoan",
+      "date": "23/10/2024",
+      "at": "2026-11-24"
+    },
+    "to chuc cac lop hoc phan hoc theo nhu cau cua sinh vien dai hoc chinh quy chuan hoc ky i nam hoc 2024 2025": {
+      "source": "ketoan",
+      "date": "19/09/2024",
+      "at": "2026-11-24"
+    },
+    "thu hoc phi hoc ky 1 nam hoc 2024 2025 he sau dai hoc": {
+      "source": "ketoan",
+      "date": "07/08/2024",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dai hoc chinh quy he vua lam vua hoc hoc ky 1 nam hoc 2024 2025 va hoan thanh cong no hoc phi": {
+      "source": "ketoan",
+      "date": "30/07/2024",
+      "at": "2026-11-24"
+    },
+    "dong hoc phi he dai hoc chinh quy chuong trinh tieng anh ban phan clc hoc ky 1 nam hoc 2024 2025 va hoan thanh cong no hoc phi": {
+      "source": "ketoan",
+      "date": "30/07/2024",
+      "at": "2026-11-24"
+    }
+  },
+  "bot_ui_version": 2
 }
