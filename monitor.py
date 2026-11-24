@@ -1156,7 +1156,7 @@ def handle_commands(token, state, results_by_source):
                 telegram_send(token, cid, build_main_menu_text(), reply_markup=build_main_menu_markup())
             elif cmd in ("/latest", "/update"):
                 for chunk in format_list_html("🔥 THÔNG BÁO MỚI NHẤT — TOÀN HUB", all_items[:15]):
-                    telegram_send(token, cid, chunk, reply_markup=build_main_menu_markup())
+                    telegram_send(token, cid, chunk, reply_markup={"inline_keyboard": [[{"text": "📌 Mở Menu", "callback_data": "m:home"}]]})
             elif cmd == "/full7d":
                 its = merge_and_dedupe_items(results_by_source, days=7)
                 for chunk in format_list_html("📅 THÔNG BÁO 7 NGÀY GẦN NHẤT", its):
@@ -1481,7 +1481,7 @@ def main():
     if not dry_run:
         save_state(state)
 
-    # 6) Chế độ --test: gửi thẻ demo tin mới nhất + Bảng điều khiển Menu
+    # 6) Chế độ --test: chỉ gửi đúng 1 thẻ thông báo mẫu (không tự bật Menu làm trôi tin)
     if do_test and can_send:
         merged = merge_and_dedupe_items(results)
         if merged:
@@ -1490,8 +1490,7 @@ def main():
             card_text, markup = build_notification_card(latest, detail=detail, is_test=True)
             for cid in chat_ids:
                 telegram_send(token, cid, card_text, reply_markup=markup)
-                telegram_send(token, cid, build_main_menu_text(), reply_markup=build_main_menu_markup())
-            log("Đã gửi thẻ kiểm tra + Menu tương tác tới {} chat.".format(len(chat_ids)))
+            log("Đã gửi thẻ kiểm tra tới {} chat.".format(len(chat_ids)))
 
 
 if __name__ == "__main__":
