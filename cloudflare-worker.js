@@ -478,7 +478,7 @@ function parseOnlineItems(html) {
         title,
         date: fmtDate(dt),
         ts: dt.getTime(),
-        url: ONLINE_HOME,
+        url: `https://online.hub.edu.vn/Messages.aspx?id=${m[1]}`,
       });
     }
   }
@@ -810,39 +810,22 @@ async function fetchArticleDetail(code, id, env = null) {
   const src = SOURCE_BY_KEY[route.source];
 
   if (code === "onl") {
-    let page = await fetchHTML(ONLINE_HOME);
-    const cookie = page.cookie;
-    let rowTarget = null;
-    let fields = getHiddenFields(page.html);
-    const rowRe = new RegExp(`title="Messages\\.aspx\\?ID=${id}"[^>]*href="javascript:__doPostBack\\(&#39;([^&]+)&#39;`);
-
-    for (let p = 1; p <= 4; p++) {
-      const m = page.html.match(rowRe);
-      if (m) {
-        rowTarget = m[1];
-        break;
-      }
-      if (p < 4) {
-        page = await fetchHTML(
-          ONLINE_HOME,
-          Object.assign({}, fields, {
-            __EVENTTARGET: ONLINE_GRID_TARGET,
-            __EVENTARGUMENT: "Page$" + (p + 1),
-          }),
-          cookie
-        );
-        fields = getHiddenFields(page.html);
-      }
+    const msgUrl = `https://online.hub.edu.vn/Messages.aspx?id=${id}`;
+    const r1 = await fetch(msgUrl, {
+      redirect: "manual",
+      headers: { "User-Agent": UA, "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8" },
+    });
+    const sc = r1.headers.get("set-cookie") || "";
+    const cookie = sc ? sc.split(";")[0].trim() : "";
+    let dHtml = "";
+    if (r1.status >= 300 && r1.status < 400) {
+      const loc = r1.headers.get("location") || ONLINE_HOME;
+      const nextUrl = loc.startsWith("http") ? loc : new URL(loc, ONLINE_HOME).href;
+      const r2 = await fetchHTML(nextUrl, null, cookie);
+      dHtml = r2.html;
+    } else {
+      dHtml = await r1.text();
     }
-    if (!rowTarget) {
-      throw new Error("Thông báo đã trôi qua các trang cũ trên Online HUB.");
-    }
-    const detail = await fetchHTML(
-      ONLINE_HOME,
-      Object.assign({}, fields, { __EVENTTARGET: rowTarget, __EVENTARGUMENT: "" }),
-      cookie
-    );
-    const dHtml = detail.html;
     const mSub = dHtml.match(/id="[^"]*lblMessageSubject"[^>]*>([\s\S]*?)<\/span>/i);
     const mDate = dHtml.match(/id="[^"]*lblDate"[^>]*>([\s\S]*?)<\/span>/i);
     const mSender = dHtml.match(/id="[^"]*lblSenderName"[^>]*>([\s\S]*?)<\/span>/i);
@@ -871,8 +854,8 @@ async function fetchArticleDetail(code, id, env = null) {
       title,
       date,
       sender,
-      url: pdfs[0] || ONLINE_HOME,
-      webUrl: ONLINE_HOME,
+      url: msgUrl,
+      webUrl: msgUrl,
       bodyText,
       deadline: extractDeadline(title + " " + bodyText),
       pdfs,

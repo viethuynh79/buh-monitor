@@ -33,6 +33,7 @@ Cách dùng thủ công:
 import concurrent.futures
 import datetime
 import html as html_lib
+import http.cookiejar
 import json
 import os
 import re
@@ -421,8 +422,7 @@ def parse_online_items(page_html):
                 "title": title,
                 "date": dt.strftime("%d/%m/%Y"),
                 "date_dt": dt,
-                "url": ONLINE_HOME,
-                "legacy_url": "https://online.hub.edu.vn/Messages.aspx?id={}".format(msg_id),
+                "url": "https://online.hub.edu.vn/Messages.aspx?id={}".format(msg_id),
             })
     return items
 
@@ -686,19 +686,18 @@ def enrich_item(item, online_home_html=None, online_cookie=None):
 
     try:
         if item["source"] == "online":
-            if not online_home_html or not online_cookie:
-                online_home_html, online_cookie, _ = fetch_http(ONLINE_HOME)
-            m_row = re.search(
-                r'title="Messages\.aspx\?ID={}"[^>]*href="javascript:__doPostBack\(&#39;([^&]+)&#39;'
-                .format(re.escape(item["id"])),
-                online_home_html,
+            cj = http.cookiejar.CookieJar()
+            opener = urllib.request.build_opener(
+                urllib.request.HTTPCookieProcessor(cj),
+                urllib.request.HTTPSHandler(context=SSL_CTX),
             )
-            if not m_row:
-                return info
-            fields = get_hidden_fields(online_home_html)
-            fields["__EVENTTARGET"] = m_row.group(1)
-            fields["__EVENTARGUMENT"] = ""
-            d_html, _, _ = fetch_http(ONLINE_HOME, data=fields, cookie=online_cookie, timeout=18, retries=1)
+            opener.addheaders = [
+                ("User-Agent", USER_AGENT),
+                ("Accept-Language", "vi-VN,vi;q=0.9,en;q=0.8"),
+            ]
+            msg_url = "https://online.hub.edu.vn/Messages.aspx?id={}".format(item["id"])
+            with opener.open(msg_url, timeout=18) as resp:
+                d_html = resp.read().decode("utf-8", "replace")
 
             m_sender = re.search(r'id="[^"]*lblSenderName"[^>]*>(.*?)</span>', d_html, re.S | re.I)
             if m_sender:
@@ -981,10 +980,10 @@ def build_notification_card(item, extra_sources=None, detail=None, is_test=False
         src_cb = "src:{}:1".format(item["source"]) if (item["source"] in SOURCE_BY_KEY or item["source"] == "fb_htttql") else "m:mis"
         row2.append({"text": "{} Xem cổng này".format(src["emoji"]), "callback_data": src_cb})
 
-    open_url = item["url"] if item["source"] != "online" else (pdfs[0] if pdfs else ONLINE_HOME)
+    open_url = item["url"]
     open_label = (
         "📘 Mở bài viết Facebook" if item["source"] == "fb_htttql"
-        else ("🏛️ Mở Online HUB" if item["source"] == "online" else "🌐 Mở bài viết")
+        else "🌐 Mở bài viết"
     )
     row2.append({"text": open_label, "url": open_url})
     keyboard.append(row2)
