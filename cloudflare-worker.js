@@ -1151,7 +1151,7 @@ function formatBroadcastPayload(bodyText, urgent = false) {
     "━━━━━━━━━━━━━━━━━━━━",
     escapeHtml(bodyText),
     "",
-    `📅 <code>${vnNowLabel()}</code> · 👤 <i>Admin ${AUTHOR_NAME}</i>`,
+    `📅 <code>${vnNowLabel()}</code> · 👤 Admin ${AUTHOR_NAME}`,
   ].join("\n");
 }
 
@@ -1206,9 +1206,9 @@ async function adminHomeView(env, adminId) {
     `👥 <b>Tổng người dùng đã /start:</b> <b>${users.length}</b>`,
     `🔔 <b>Đang bật nhận thông báo:</b> <b>${active}</b>`,
     `🔕 <b>Đã tắt TB / chặn bot:</b> <b>${muted}</b>`,
-    `⏱ <i>Cập nhật: ${vnNowLabel()}</i>`,
+    `⏱ Cập nhật: ${vnNowLabel()}`,
     "",
-    "💡 <i>Mẹo nhanh: Gõ <code>/bc Nội dung...</code> (hoặc gửi ảnh kèm chú thích <code>/bc ...</code>) để tạo bản xem trước &amp; phát sóng ngay!</i>",
+    "💡 Mẹo nhanh: Gõ <code>/bc Nội dung...</code> (hoặc gửi ảnh kèm chú thích <code>/bc ...</code>) để tạo bản xem trước &amp; phát sóng ngay!",
   ].join("\n");
 
   const markup = {
@@ -1237,12 +1237,12 @@ async function adminUsersView(env, page = 1) {
 
   const lines = [
     "👥 <b>DANH SÁCH NGƯỜI DÙNG BOT</b>",
-    `<i>Trang ${safePage}/${totalPages} · Tổng ${users.length} người</i>`,
+    `Trang ${safePage}/${totalPages} · Tổng ${users.length} người`,
     "━━━━━━━━━━━━━━━━━━━━",
   ];
 
   if (!slice.length) {
-    lines.push("\n<i>Chưa có người dùng nào được ghi nhận.</i>");
+    lines.push("\nChưa có người dùng nào được ghi nhận.");
   } else {
     slice.forEach((u, idx) => {
       const n = (safePage - 1) * perPage + idx + 1;
@@ -1335,13 +1335,13 @@ async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
 function mainMenuView() {
   const text = [
     "📌 <b>BẢNG ĐIỀU KHIỂN — HUB MONITOR PRO</b>",
-    "🎓 <i>Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)</i>",
+    "🎓 Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)",
     "━━━━━━━━━━━━━━━━━━━━",
     `🟢 <b>Trạng thái BOT:</b> Đang hoạt động · <code>${vnNowLabel()}</code>`,
     "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram",
-    `👨‍💻 <b>Author:</b> <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a> <i>(MIS · HUB)</i>`,
+    `👨‍💻 <b>Author:</b> <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a> (MIS · HUB)`,
     "",
-    "👇 <i>Vui lòng chọn menu bên dưới:</i>",
+    "👇 Vui lòng chọn menu bên dưới:",
   ].join("\n");
 
   const markup = {
@@ -1386,7 +1386,7 @@ function authorView() {
     "🤖 <b>Dự án:</b> <b>HUB Monitor Pro v2.0</b> — Hệ thống tự động cập nhật &amp; tra cứu thông báo toàn trường HUB",
     "🛠️ <b>Hệ thống:</b> Telegram Bot API · Cloudflare Edge · Tự động 24/7",
     "",
-    "💬 <i>Cần góp ý tính năng mới, báo lỗi hoặc kết nối giao lưu, bấm nút Facebook bên dưới để liên hệ mình nhé!</i>",
+    "💬 Cần góp ý tính năng mới, báo lỗi hoặc kết nối giao lưu, bấm nút Facebook bên dưới để liên hệ mình nhé!",
   ].join("\n");
 
   const markup = {
@@ -1411,7 +1411,7 @@ function misHubView() {
     "• 📢 Tự động theo dõi <b>Thông báo &amp; Sự kiện Website Khoa HTTTQL</b>",
     "• 🌟 <b>Radar MIS:</b> Gom mọi tin liên quan HTTTQL, CNTT, Đồ án, TMĐT, AI từ toàn trường HUB",
     "",
-    "👇 <i>Chọn mục bạn muốn xem:</i>",
+    "👇 Chọn mục bạn muốn xem:",
   ].join("\n");
 
   const markup = {
@@ -1438,7 +1438,7 @@ function portalsMenuView() {
     "━━━━━━━━━━━━━━━━━━━━",
     "Tất cả các website chính thức của ĐH Ngân hàng TP.HCM đều được tích hợp &amp; theo dõi tự động mỗi 5 phút.",
     "",
-    "👇 <i>Chọn cổng bạn muốn xem riêng:</i>",
+    "👇 Chọn cổng bạn muốn xem riêng:",
   ].join("\n");
 
   const markup = {
@@ -1476,7 +1476,7 @@ function topicsMenuView() {
     "━━━━━━━━━━━━━━━━━━━━",
     "Bot tự động phân loại thông báo từ toàn bộ 7 cổng HUB theo từng chuyên mục sinh viên hay tìm nhất.",
     "",
-    "👇 <i>Chọn chủ đề muốn lọc:</i>",
+    "👇 Chọn chủ đề muốn lọc:",
   ].join("\n");
 
   const markup = {
@@ -1505,10 +1505,10 @@ function searchMenuView() {
   const text = [
     "🔎 <b>TÌM KIẾM THÔNG MINH TOÀN HỆ THỐNG HUB</b>",
     "━━━━━━━━━━━━━━━━━━━━",
-    "✨ <b>Hỗ trợ tìm KHÔNG CẦN DẤU</b> (gõ <code>hoc bong</code> vẫn ra <i>Học bổng</i>!)",
+    "✨ <b>Hỗ trợ tìm KHÔNG CẦN DẤU</b> (gõ <code>hoc bong</code> vẫn ra Học bổng!)",
     "💬 <b>Mẹo cực nhanh:</b> Bạn có thể <b>nhắn thẳng từ khoá</b> bất kỳ vào khung chat (không cần gõ <code>/find</code>) là bot tự tìm ngay!",
     "",
-    "👇 <i>Chọn nhanh từ khoá phổ biến hoặc nhập tự do:</i>",
+    "👇 Chọn nhanh từ khoá phổ biến hoặc nhập tự do:",
   ].join("\n");
 
   const rows = [];
@@ -1590,7 +1590,7 @@ function helpView() {
     "• Bấm các nút số <b>📖 1–5</b> dưới mỗi danh sách để đọc chi tiết &amp; tải PDF ngay trong Telegram!",
     "• Gõ <code>@viethubnews_bot lịch thi</code> trong bất kỳ nhóm lớp nào để chia sẻ thông báo chính thức (nếu đã bật Inline Mode trong BotFather).",
     "",
-    `👨‍💻 <i>Phát triển bởi <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a> · Sinh viên Khoa HTTTQL (MIS) — HUB</i>`,
+    `👨‍💻 Phát triển bởi <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a> · Sinh viên Khoa HTTTQL (MIS) — HUB`,
   ].join("\n");
 
   const markup = {
@@ -1615,13 +1615,13 @@ function buildPaginatedListView(title, items, page, baseCbPrefix, extra = {}) {
 
   const lines = [
     `<b>${escapeHtml(title)}</b>`,
-    `<i>Trang ${safePage}/${totalPages} · Tổng ${total} tin · ⏱ ${vnNowLabel()}</i>`,
+    `Trang ${safePage}/${totalPages} · Tổng ${total} tin · ⏱ ${vnNowLabel()}`,
     "━━━━━━━━━━━━━━━━━━━━",
   ];
 
   if (!slice.length) {
     lines.push("");
-    lines.push("📭 <i>Không có thông báo nào phù hợp trong mục này.</i>");
+    lines.push("📭 Không có thông báo nào phù hợp trong mục này.");
   } else {
     slice.forEach((it, idx) => {
       const num = start + idx + 1;
@@ -1641,7 +1641,7 @@ function buildPaginatedListView(title, items, page, baseCbPrefix, extra = {}) {
       lines.push(`   └ ${src.emoji} ${escapeHtml(src.short)} · 📅 <code>${escapeHtml(it.date)}</code>${extraTag}`);
     });
     lines.push("");
-    lines.push("💡 <i>Bấm nút số bên dưới để đọc nội dung &amp; tải PDF ngay trong chat!</i>");
+    lines.push("💡 Bấm nút số bên dưới để đọc nội dung &amp; tải PDF ngay trong chat!");
   }
 
   const keyboard = [];
@@ -1713,7 +1713,7 @@ function buildDetailView(detail, backCb = "m:home") {
     lines.push(`👤 <b>Đơn vị gửi:</b> ${escapeHtml(detail.sender)}`);
   }
   if (detail.deadline) {
-    lines.push(`⏰ <b>Lưu ý hạn:</b> <i>${escapeHtml(detail.deadline)}</i>`);
+    lines.push(`⏰ <b>Lưu ý hạn:</b> ${escapeHtml(detail.deadline)}`);
   }
 
   const totalAtt = detail.pdfs.length + detail.downloads.length;
@@ -1728,7 +1728,7 @@ function buildDetailView(detail, backCb = "m:home") {
     lines.push(escapeHtml(trimmed));
   } else if (totalAtt > 0) {
     lines.push("");
-    lines.push("📄 <i>Thông báo này trình bày trực tiếp dưới dạng file PDF đính kèm — bấm nút màu xanh bên dưới để mở xem ngay!</i>");
+    lines.push("📄 Thông báo này trình bày trực tiếp dưới dạng file PDF đính kèm — bấm nút màu xanh bên dưới để mở xem ngay!");
   }
 
   const keyboard = [];
@@ -1786,12 +1786,12 @@ function buildDigestView(allItems, days) {
 
   const lines = [
     `📰 <b>BẢN TIN TỔNG HỢP ${days} NGÀY — HUB MONITOR PRO</b>`,
-    `<i>Cập nhật: ${vnNowLabel()} · Tổng ${allItems.length} thông báo (đã gộp trùng)</i>`,
+    `Cập nhật: ${vnNowLabel()} · Tổng ${allItems.length} thông báo (đã gộp trùng)`,
     "━━━━━━━━━━━━━━━━━━━━",
   ];
 
   if (!allItems.length) {
-    lines.push("\n📭 <i>Không có thông báo mới nào trong khoảng thời gian này.</i>");
+    lines.push("\n📭 Không có thông báo mới nào trong khoảng thời gian này.");
   } else {
     const sections = [
       { key: "mis",     head: "💻 <b>Khoa HTTTQL (MIS) &amp; Liên quan</b>" },
@@ -1807,7 +1807,7 @@ function buildDigestView(allItems, days) {
       const list = buckets[sec.key];
       if (!list.length) continue;
       lines.push("");
-      lines.push(`${sec.head} <i>(${list.length} tin)</i>`);
+      lines.push(`${sec.head} (${list.length} tin)`);
       list.slice(0, 3).forEach((it) => {
         const shortT = it.title.length > 78 ? it.title.slice(0, 75) + "..." : it.title;
         lines.push(`• <code>${it.date}</code> <a href="${escapeHtml(it.url)}">${escapeHtml(shortT)}</a>`);
@@ -1836,7 +1836,7 @@ function buildStatusView(data) {
   const totalItems = data.health.reduce((s, h) => s + h.count, 0);
   const lines = [
     "📊 <b>TRẠNG THÁI HỆ SINH THÁI HUB (REAL-TIME)</b>",
-    `<i>Kiểm tra lúc: ${data.fetchedAt}</i>`,
+    `Kiểm tra lúc: ${data.fetchedAt}`,
     "━━━━━━━━━━━━━━━━━━━━",
     `🟢 <b>Hoạt động:</b> ${okCount}/${data.health.length} cổng · <b>${totalItems}</b> tin đã lập chỉ mục`,
     "",
@@ -1846,8 +1846,8 @@ function buildStatusView(data) {
     const src = SOURCE_BY_KEY[h.key];
     const dot = h.ok ? "🟢" : "🔴";
     const info = h.ok
-      ? `${h.count} tin · mới nhất <code>${h.latestDate}</code> · <i>${h.ms}ms</i>`
-      : `<i>Lỗi: ${escapeHtml(h.error.slice(0, 40))}</i>`;
+      ? `${h.count} tin · mới nhất <code>${h.latestDate}</code> · ${h.ms}ms`
+      : `Lỗi: ${escapeHtml(h.error.slice(0, 40))}`;
     lines.push(`${dot} ${src.emoji} <b>${escapeHtml(src.short)}</b>`);
     lines.push(`   └ ${info}`);
   }
@@ -1921,7 +1921,7 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
         text: [
           "📘 <b>FANPAGE KHOA HỆ THỐNG THÔNG TIN QUẢN LÝ (MIS — HUB)</b>",
           "━━━━━━━━━━━━━━━━━━━━",
-          "👇 <i>Bấm nút bên dưới để xem bài viết mới nhất trực tiếp trên Fanpage Khoa:</i>",
+          "👇 Bấm nút bên dưới để xem bài viết mới nhất trực tiếp trên Fanpage Khoa:",
         ].join("\n"),
         markup: {
           inline_keyboard: [
@@ -2195,7 +2195,7 @@ async function handleMessage(msg, env) {
     await sendMsg(
       env,
       chatId,
-      "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>\n<i>(Lưu ý: Telegram chỉ cho phép bot xoá tin nhắn trong vòng 48 giờ)</i>",
+      "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>\n(Lưu ý: Telegram chỉ cho phép bot xoá tin nhắn trong vòng 48 giờ)",
       {
         inline_keyboard: [[
           { text: "📌 Mở Menu", callback_data: "m:home" },
@@ -2340,7 +2340,7 @@ async function handleCallback(cb, env) {
         (isUrgent
           ? "🚨 <b>SOẠN THÔNG BÁO PHÁT SÓNG KHẨN</b>\n"
           : "📢 <b>SOẠN THÔNG BÁO PHÁT SÓNG CHO TẤT CẢ NGƯỜI DÙNG</b>\n") +
-        "<i>Hãy trả lời tin nhắn này bằng văn bản (hoặc gửi ảnh kèm chú thích). Bot sẽ cho bạn xem trước trước khi phát sóng!</i>",
+        "Hãy trả lời tin nhắn này bằng văn bản (hoặc gửi ảnh kèm chú thích). Bot sẽ cho bạn xem trước trước khi phát sóng!",
         { force_reply: true, input_field_placeholder: "Nhập nội dung thông báo gửi tới mọi người..." }
       );
       return;
@@ -2428,7 +2428,7 @@ async function handleCallback(cb, env) {
         env,
         chatId,
         messageId,
-        "🧹 <b>XÁC NHẬN DỌN LỊCH SỬ TRÒ CHUYỆN</b>\n━━━━━━━━━━━━━━━━━━━━\nBot sẽ xoá các tin nhắn gần đây (trong vòng 48 giờ theo quy định của Telegram).\n\n<i>Bạn muốn dọn bao nhiêu tin gần nhất?</i>",
+        "🧹 <b>XÁC NHẬN DỌN LỊCH SỬ TRÒ CHUYỆN</b>\n━━━━━━━━━━━━━━━━━━━━\nBot sẽ xoá các tin nhắn gần đây (trong vòng 48 giờ theo quy định của Telegram).\n\nBạn muốn dọn bao nhiêu tin gần nhất?",
         {
           inline_keyboard: [
             [
@@ -2451,7 +2451,7 @@ async function handleCallback(cb, env) {
       await sendMsg(
         env,
         chatId,
-        "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>\n<i>(Lưu ý: Telegram chỉ cho phép bot xoá tin nhắn trong vòng 48 giờ)</i>",
+        "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>\n(Lưu ý: Telegram chỉ cho phép bot xoá tin nhắn trong vòng 48 giờ)",
         {
           inline_keyboard: [[
             { text: "📌 Mở Menu", callback_data: "m:home" },
@@ -2469,7 +2469,7 @@ async function handleCallback(cb, env) {
       await sendMsg(
         env,
         chatId,
-        "🔎 <b>Nhập từ khoá bạn muốn tìm trên toàn hệ thống HUB</b>\n<i>(Hỗ trợ không dấu, ví dụ: học bổng, lịch thi đợt 2, tốt nghiệp, MIS...)</i>",
+        "🔎 <b>Nhập từ khoá bạn muốn tìm trên toàn hệ thống HUB</b>\n(Hỗ trợ không dấu, ví dụ: học bổng, lịch thi đợt 2, tốt nghiệp, MIS...)",
         { force_reply: true, input_field_placeholder: "VD: hoc bong, lich thi, ngoai tru..." }
       );
     }
@@ -2519,7 +2519,7 @@ async function handleInlineQuery(iq, env) {
         `━━━━━━━━━━━━━━━━━━━━`,
         `🏢 <b>Nguồn:</b> ${src.emoji} ${escapeHtml(src.name)}`,
         `📅 <b>Ngày đăng:</b> <code>${escapeHtml(it.date)}</code>`,
-        `🏷️ <code>${cat.tag}</code> · <i>Chia sẻ qua HUB Monitor Pro</i>`,
+        `🏷️ <code>${cat.tag}</code> · Chia sẻ qua HUB Monitor Pro`,
       ].join("\n");
       return {
         type: "article",

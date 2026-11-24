@@ -900,12 +900,12 @@ def build_main_menu_text():
     now_vn = datetime.datetime.now(VN_TZ).strftime("%H:%M · %d/%m/%Y")
     return (
         "📌 <b>BẢNG ĐIỀU KHIỂN — HUB MONITOR PRO</b>\n"
-        "🎓 <i>Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)</i>\n"
+        "🎓 Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "🟢 <b>Trạng thái BOT:</b> Đang hoạt động · <code>{}</code>\n"
         "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram\n"
-        "👨‍💻 <b>Author:</b> <a href=\"{}\">{}</a> <i>(MIS · HUB)</i>\n\n"
-        "👇 <i>Vui lòng chọn menu bên dưới:</i>"
+        "👨‍💻 <b>Author:</b> <a href=\"{}\">{}</a> (MIS · HUB)\n\n"
+        "👇 Vui lòng chọn menu bên dưới:"
     ).format(now_vn, AUTHOR_FB_URL, AUTHOR_NAME)
 
 
@@ -952,7 +952,7 @@ def build_notification_card(item, extra_sources=None, detail=None, is_test=False
     if sender:
         lines.append("👤 <b>Đơn vị:</b> {}".format(escape_html(sender)))
     if deadline:
-        lines.append("⏰ <b>Lưu ý hạn:</b> <i>{}</i>".format(escape_html(deadline)))
+        lines.append("⏰ <b>Lưu ý hạn:</b> {}".format(escape_html(deadline)))
 
     att_parts = []
     if pdfs:
@@ -965,7 +965,7 @@ def build_notification_card(item, extra_sources=None, detail=None, is_test=False
     if summary and len(summary) > 30 and not summary.lower().startswith("sv xem chi tiết"):
         preview = summary[:190] + ("..." if len(summary) > 190 else "")
         lines.append("")
-        lines.append("💬 <i>{}</i>".format(escape_html(preview)))
+        lines.append("💬 {}".format(escape_html(preview)))
 
     # Inline Buttons giống phong cách ảnh mẫu (nút chính full-width nổi bật + nút phụ 2 cột)
     keyboard = []
@@ -1006,9 +1006,9 @@ def build_notification_card(item, extra_sources=None, detail=None, is_test=False
 
 def format_list_html(header, items, limit=15):
     if not items:
-        return [header + "\n\n<i>Không tìm thấy thông báo nào phù hợp.</i>"]
+        return [header + "\n\nKhông tìm thấy thông báo nào phù hợp."]
     shown = items[:limit]
-    lines = ["<b>{}</b> <i>({} tin)</i>".format(escape_html(header), len(items)), "━━━━━━━━━━━━━━━━━━━━"]
+    lines = ["<b>{}</b> ({} tin)".format(escape_html(header), len(items)), "━━━━━━━━━━━━━━━━━━━━"]
     for i, it in enumerate(shown, 1):
         src = SOURCE_BY_KEY.get(it["source"], {"emoji": "📌", "short": it["source"]})
         cat = classify_item(it["title"], it["source"])
@@ -1024,7 +1024,7 @@ def format_list_html(header, items, limit=15):
             src["emoji"], escape_html(src["short"]), escape_html(it["date"])
         ))
     if len(items) > limit:
-        lines.append("\n<i>... và {} tin khác. Gõ /menu để duyệt theo trang!</i>".format(len(items) - limit))
+        lines.append("\n... và {} tin khác. Gõ /menu để duyệt theo trang!".format(len(items) - limit))
 
     chunks = []
     cur = ""
