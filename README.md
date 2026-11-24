@@ -1,132 +1,128 @@
-# Bot theo dõi thông báo trường ĐH Ngân Hàng (online.hub.edu.vn)
+# 🎓 HUB Monitor Pro v2.0 — Bot Telegram Hệ sinh thái ĐH Ngân hàng TP.HCM (MIS Edition)
 
-Bot tự động quét trang **"THÔNG BÁO MỚI"** của `https://online.hub.edu.vn/` mỗi **5 phút**
-và gửi tin nhắn **Telegram** ngay khi trường đăng thông báo/tin tức mới.
+Bot Telegram thế hệ mới tự động quét **toàn bộ hệ sinh thái thông báo của Trường Đại học Ngân hàng TP.HCM (HUB)** & **Khoa Hệ thống Thông tin Quản lý (HTTTQL / MIS)** mỗi **5 phút**, tự động gửi thẻ thông báo kèm nút bấm Inline & file PDF ngay khi trường cập nhật website!
 
-- Chạy trên **GitHub Actions** → **máy tính tắt vẫn hoạt động**, miễn phí, không cần thẻ tín dụng.
-- Không cần cài đặt gì trên máy (chỉ cần tạo tài khoản GitHub).
+- 🚀 **Chạy 24/7 hoàn toàn miễn phí** trên **GitHub Actions** (tự đẩy tin mới) + **Cloudflare Workers** (bấm nút & phản hồi tức thì < 1 giây).
+- 🎨 **Giao diện nút bấm Inline chuẩn App** (có nút **Menu** xanh ở góc dưới trái, phân trang cập nhật tại chỗ không spam chat).
+- 📄 **Đọc nhanh toàn văn & Tải file PDF trực tiếp ngay trong Telegram** — không cần phải mở trình duyệt chờ web trường tải chậm.
 
 ---
 
-## Các lệnh Telegram
+## 🌐 Toàn bộ hệ thống thông báo đã tích hợp
 
-Nhắn cho bot (mở `@viethubnews_bot` trên Telegram):
+| # | Cổng thông tin HUB | Website theo dõi | Auto-Push (5p) | Đọc PDF trong chat |
+|---|---|---|---|---|
+| 1 | 💻 **Khoa HTTTQL (MIS) — Thông báo** | `khoahtttql.hub.edu.vn/thong-bao` | ✅ | ✅ |
+| 2 | 🚀 **Khoa HTTTQL (MIS) — Sự kiện** | `khoahtttql.hub.edu.vn/thong-bao-su-kien/su-kien-hoat-dong` | ✅ | ✅ |
+| 3 | 📝 **Phòng Khảo thí & ĐBCL** | `phongktdbcl.hub.edu.vn/thong-bao` | ✅ | ✅ |
+| 4 | 🎓 **Phòng Quản lý Đào tạo (Thông báo)** | `phongdaotao.hub.edu.vn/thong-bao` | ✅ | ✅ |
+| 5 | 📰 **Phòng Đào tạo (Tin tức & Thực tập)** | `phongdaotao.hub.edu.vn/` | ✅ | ✅ |
+| 6 | 🤝 **Trung tâm SV & QHDN (SCC)** | `scc.hub.edu.vn/thong-bao` | ✅ | ✅ |
+| 7 | 🏫 **Cổng Chính Trường HUB** | `hub.edu.vn/thong-bao` | ✅ | ✅ |
+| 8 | 💰 **Phòng Tài chính - Kế toán** | `phongketoan.hub.edu.vn/thong-bao` | ✅ | ✅ |
+| 9 | 🏛️ **Cổng Sinh viên Online** | `online.hub.edu.vn` | ✅ | ✅ (giải mã postback PDF!) |
+| 10 | 📘 **Fanpage Khoa HTTTQL (Facebook)** | `facebook.com/htttql.hub` | ⚡ Tuỳ chọn RSS | Nút mở nhanh |
+
+---
+
+## ✨ Tính năng nâng cấp đặc biệt v2.0
+
+1. **🔔 Auto-Notify Thông minh & Chống trùng lặp chéo cổng**
+   - Quét song song cả 9 nguồn mỗi 5 phút.
+   - Nếu trường đăng cùng 1 thông báo lên cả `online.hub.edu.vn` lẫn `phongktdbcl.hub.edu.vn` (hoặc `scc.hub.edu.vn`), bot **tự động gộp thành 1 thẻ duy nhất** (ưu tiên link chuẩn có PDF, không spam 2 lần!).
+   - Tự trích xuất sẵn **link file PDF**, **đơn vị gửi**, **cảnh báo hạn chót (`⏰ Lưu ý hạn`)** và gắn nút bấm ngay dưới thẻ tin!
+
+2. **📌 Bảng điều khiển `/menu` & Nút `Menu` xanh ở góc trái**
+   - Giao diện nút bấm đối xứng gọn đẹp:
+     - `🔥 Thông báo mới nhất (Tất cả cổng HUB)`
+     - `📅 Tin 7 ngày` | `🗓️ Tin 30 ngày`
+     - `💻 Khoa HTTTQL (MIS)` | `📝 Lịch thi & ĐBCL`
+     - `🏢 Chọn cổng HUB (7)` | `🏷️ Lọc theo chủ đề`
+     - `🔎 Tìm kiếm nhanh` | `📰 Bản tin tuần`
+     - `🔗 Cổng tiện ích SV` | `📊 Trạng thái HUB`
+     - `❓ Hướng dẫn & Lệnh nhanh`
+
+3. **💻 Không gian riêng Khoa HTTTQL (MIS)**
+   - Nút `/htttql` riêng gom Thông báo Khoa, Sự kiện/Tọa đàm, Website Khoa & Fanpage `fb.com/htttql.hub`.
+   - **🌟 Radar MIS:** Tự động quét toàn bộ 7 cổng HUB để đánh dấu `⭐ KHOA HTTTQL` cho mọi tin liên quan đến *Hệ thống thông tin quản lý, MIS, CNTT, Đồ án ngành, TMĐT, AI, Chuyển đổi số*.
+
+4. **📄 Trình đọc nhanh & Tải PDF trong Telegram**
+   - Dưới mỗi danh sách 5 tin có thanh nút `[ 📖 1 ] [ 📖 2 ] [ 📖 3 ] [ 📖 4 ] [ 📖 5 ]`.
+   - Bấm 1 chạm để đọc nội dung trích xuất + bấm nút `📥 Mở / Tải PDF` tải thẳng file từ `fileserver2.hub.edu.vn` hoặc `online.hub.edu.vn`!
+
+5. **🔎 Tìm kiếm thông minh KHÔNG CẦN DẤU + Chip 1 chạm**
+   - Nhắn thẳng từ khoá bất kỳ vào chat (ví dụ `hoc bong`, `lich thi`, `ngoai tru`) mà không cần gõ `/find`!
+   - Hoặc bấm nút `🔎 Tìm kiếm nhanh` để chọn nhanh các từ khoá phổ biến.
+
+6. **📤 Chia sẻ tin ngay trong nhóm lớp (Inline Mode)**
+   - Bật **Inline Mode** trong `@BotFather` (`/setinline`) → gõ `@viethubnews_bot lịch thi` trong bất kỳ nhóm chat lớp nào để gửi thẻ thông báo chính thức kèm nút mở link!
+
+---
+
+## ⌨️ Danh sách lệnh Telegram
 
 | Lệnh | Tác dụng |
 |---|---|
-| `/update` | Xem **thông báo mới nhất** ngay lập tức (real-time, kèm link) |
-| `/full7d` | Xem danh sách thông báo **7 ngày gần nhất** (kèm link) |
-| `/full30d` | Xem danh sách thông báo **30 ngày gần nhất** (kèm link) |
-| `/find <từ khoá>` | Tìm từ khoá trong tiêu đề thông báo **30 ngày gần nhất**, ví dụ `/find học bổng` |
-| `/help` hoặc `/start` | Xem hướng dẫn |
-
-> ⚡ Khi gửi lệnh, bot nhắn ngay **"⏳ Đang truy thông tin..."** rồi trả kết quả trong 1–2 giây
-> (nhờ webhook Cloudflare — xem mục 5). Nếu chưa cài webhook, lệnh được xử lý sau mỗi chu kỳ quét (~5 phút).
-
----
-
-## 1. Chuẩn bị (làm 1 lần, khoảng 10 phút)
-
-### a) Tạo bot Telegram, lấy `BOT_TOKEN`
-1. Mở Telegram, tìm **@BotFather** (bot chính thức, có tick xanh).
-2. Gửi lệnh: `/newbot`
-3. Đặt tên bot (ví dụ: `Thong bao BUH cua toi`).
-4. Đặt username bot, **phải kết thúc bằng `bot`** (ví dụ: `buh_thongbao_bot`).
-5. BotFather trả về một dòng dạng:
-   `Use this token to access the HTTP API:` → copy token này, ví dụ:
-   `7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-   → đây là `BOT_TOKEN`.
-
-### b) Lấy `CHAT_ID` (id người nhận tin)
-1. Trong Telegram, mở chat với bot vừa tạo, bấm **Start** (gửi `/start`).
-2. Tìm **@userinfobot**, bấm Start, nó sẽ trả về `Id` của bạn (ví dụ `123456789`)
-   → đây là `CHAT_ID`.
-   (Cách khác: gửi 1 tin bất kỳ cho bot, rồi mở
-   `https://api.telegram.org/bot<BOT_TOKEN>/getUpdates` và tìm `"chat":{"id":...}`.)
-
-### c) Tạo repository GitHub
-1. Đăng ký/đăng nhập [github.com](https://github.com).
-2. Bấm **New repository**:
-   - Tên: `buh-monitor`
-   - Chọn **Public** (bắt buộc để miễn phí chạy liên tục; repo chỉ chứa code, KHÔNG chứa token).
-   - Không cần tạo README.
-3. Tải file trong thư mục này lên repo (gồm: `monitor.py`, `.github/workflows/monitor.yml`,
-   `cloudflare-worker.js`, `seen.json`, `.gitignore`, `README.md`).
-
-### d) Thêm 2 "secret" vào repo
-1. Vào repo → tab **Settings** → **Secrets and variables** → **Actions**.
-2. Bấm **New repository secret**, thêm:
-   - `TELEGRAM_BOT_TOKEN` = token bot ở bước (a).
-   - `TELEGRAM_CHAT_ID`   = id ở bước (b).
-
-### e) Bật và chạy thử
-1. Vào repo → tab **Actions** → bấm **I understand my workflows, go ahead and enable them**.
-2. Chọn workflow **BUH Monitor** → **Run workflow** → nhập `true` vào ô test → **Run workflow**.
-3. Đợi ~1 phút, bạn sẽ nhận tin nhắn Telegram:
-   `✅ Bot BUH đã hoạt động.`
-
-Xong! Từ giờ bot tự chạy mỗi 5 phút, máy tính tắt vẫn nhận thông báo.
+| `/menu` hoặc `/start` | 📌 Mở bảng điều khiển nút bấm (Full tính năng) |
+| `/latest` hoặc `/update` | 🔥 Xem thông báo mới nhất từ tất cả cổng HUB (real-time) |
+| `/full7d` | 📅 Danh sách thông báo 7 ngày gần nhất (phân trang nút bấm) |
+| `/full30d` | 🗓️ Danh sách thông báo 30 ngày gần nhất (phân trang nút bấm) |
+| `/find <từ khoá>` | 🔎 Tìm kiếm không phân biệt dấu toàn HUB (hoặc nhắn thẳng từ khoá!) |
+| `/htttql` (hoặc `/mis`) | 💻 Không gian riêng Khoa HTTTQL (MIS), Radar MIS & Fanpage |
+| `/thi` | 📝 Lịch thi, phúc khảo, vắng thi, xóa điểm I |
+| `/daotao` | 🎓 Phòng Quản lý Đào tạo (Thông báo, Tin tức, Thực tập & Tốt nghiệp) |
+| `/scc` | 🤝 Trung tâm Sinh viên & QHDN (Ngoại trú, Học bổng, Hoạt động SV) |
+| `/hocphi` | 💰 Học phí, miễn giảm, công nợ (Phòng Tài chính - Kế toán) |
+| `/hocbong` | 🏆 Săn học bổng & khen thưởng toàn HUB |
+| `/digest` | 📰 Bản tin tổng hợp tuần/tháng nhóm theo chủ đề |
+| `/portals` | 🔗 Mở nhanh LMS, Đăng ký tín chỉ, eStudent, Thư viện, Fanpage MIS |
+| `/status` | 📊 Kiểm tra tình trạng hoạt động & độ trễ 7 cổng HUB (real-time) |
+| `/help` | ❓ Xem hướng dẫn chi tiết |
 
 ---
 
-## 2. Cách hoạt động
+## 🛠️ Hướng dẫn cập nhật & cài đặt (Chỉ mất 2 phút!)
 
-- Mỗi lần chạy, bot tải trang chủ, đọc danh sách **THÔNG BÁO MỚI** (id + tiêu đề + ngày đăng).
-- So sánh với file `seen.json` (danh sách đã biết) để tìm **tin mới**.
-- Tin mới → gửi Telegram:
-  ```
-  🔔 THÔNG BÁO MỚI — BUH
-  📌 <tiêu đề>
-  📅 <ngày đăng>
-  🔗 https://online.hub.edu.vn/Messages.aspx?id=<id>
-  ```
-- Lần đầu chỉ ghi mốc (không spam các tin cũ). File `seen.json` được bot tự cập nhật
-  (chỉ commit khi có tin mới).
+### Bước 1: Cập nhật Cloudflare Worker (Để bấm nút & trả lời tức thì)
+1. Vào [dash.cloudflare.com](https://dash.cloudflare.com) → **Workers & Pages** → mở Worker bot của bạn (`buh-bot`).
+2. Bấm **Edit code** → xoá code cũ → dán toàn bộ nội dung file [`cloudflare-worker.js`](./cloudflare-worker.js) vào → bấm **Deploy**.
+3. Đảm bảo trong **Settings → Variables and Secrets** đã có biến `BOT_TOKEN` (token bot từ BotFather).
+4. **Cài đặt tự động 1-Click:** Mở trình duyệt và truy cập:
+   ```
+   https://<ten-worker-cua-ban>.workers.dev/setup
+   ```
+   Trang trả về `"status": "ALL_OK"` nghĩa là đã tự động:
+   - ✅ Kết nối Webhook (nhận cả lệnh, nút bấm Inline & Inline Mode)
+   - ✅ Đăng ký toàn bộ 16 câu lệnh tiếng Việt
+   - ✅ Bật **nút `Menu` màu xanh** ở góc dưới bên trái Telegram!
 
-## 3. Lưu ý
+> 💡 *(Tuỳ chọn bảo mật)*: Bạn có thể thêm biến `SETUP_SECRET` trong Cloudflare Worker Settings nếu muốn khoá đường dẫn `/setup?key=<SETUP_SECRET>`.
 
-- **Giữ repo Public** để chạy miễn phí không giới hạn. Token nằm trong *Secret* nên không ai đọc được.
-- GitHub chạy theo lịch có thể trễ vài phút; 5 phút/lần là mức nhanh nhất GitHub hỗ trợ
-  (thực tế với tin nhà trường là đủ nhanh).
-- Nếu repo không có hoạt động nào trong 60 ngày, GitHub có thể tạm dừng lịch — chỉ cần vào
-  repo bấm chạy lại 1 lần là hoạt động tiếp.
-- Webhook Cloudflare (mục 5) chỉ để **trả lời lệnh tức thì**; việc **đẩy thông báo mới** vẫn do
-  GitHub Actions đảm nhiệm mỗi 5 phút.
+### Bước 2: Kiểm tra GitHub Actions (Auto-Push 24/7 mỗi 5 phút)
+1. Vào repo GitHub → **Settings → Secrets and variables → Actions** đảm bảo đã có:
+   - `TELEGRAM_BOT_TOKEN`: token bot Telegram
+   - `TELEGRAM_CHAT_ID`: chat ID của bạn *(hỗ trợ gửi nhiều nơi bằng dấu phẩy, VD: `123456,-100987654`)*
+2. Vào tab **Actions → HUB Monitor Pro → Run workflow**:
+   - Nhập `true` vào ô **test** → bấm **Run workflow**.
+   - Sau ~30 giây, Telegram của bạn sẽ nhận được **Thẻ thông báo mẫu có nút tải PDF** + **Bảng điều khiển `/menu` mới**!
 
-## 4. Chạy thử trên máy (không bắt buộc)
+### Bước 3 *(Tuỳ chọn)*: Nhận Auto-Push bài đăng mới từ Fanpage Facebook Khoa HTTTQL
+Facebook chặn máy chủ bên ngoài đọc trực tiếp mà không đăng nhập, nên nếu bạn muốn bot **tự động gửi thông báo khi Fanpage `fb.com/htttql.hub` có bài mới**:
+1. Tạo 1 link RSS miễn phí cho `https://www.facebook.com/htttql.hub` (ví dụ qua [rss.app](https://rss.app) hoặc dịch vụ RSS bridge).
+2. Vào GitHub Repo → **Settings → Secrets → Actions** → thêm secret mới tên `FB_HTTTQL_RSS_URL` với giá trị là link RSS đó.
+3. Bot sẽ tự động quét thêm Fanpage Khoa HTTTQL mỗi 5 phút mà không cần sửa code!
+
+### Bước 4 *(Tuỳ chọn)*: Bật chế độ chia sẻ nhanh trong nhóm lớp (`Inline Mode`)
+1. Nhắn `@BotFather` lệnh `/setinline`.
+2. Chọn bot của bạn → nhập gợi ý: `Tìm thông báo HUB (VD: lịch thi, học bổng)...`.
+3. Từ giờ trong bất kỳ nhóm chat nào, chỉ cần gõ `@<username_bot> lịch thi` để chia sẻ thông báo chính thức ngay!
+
+---
+
+## 💻 Chạy thử trên máy cá nhân
 
 ```powershell
-cd buh-monitor
-python monitor.py --test
+python monitor.py --dry-run    # Quét thử tất cả 9 nguồn HUB (không gửi Telegram, không sửa seen.json)
+python monitor.py --setup-bot  # Cài đặt nút Menu xanh & danh sách lệnh
+python monitor.py --test       # Gửi thẻ demo + Menu tương tác về Telegram
 ```
-
-- Nếu không muốn đặt biến môi trường, tạo file `config.json` cạnh `monitor.py`:
-  ```json
-  {
-    "telegram_bot_token": "7123456789:AAH...",
-    "telegram_chat_id": "123456789"
-  }
-  ```
-  (`config.json` đã nằm trong `.gitignore`, sẽ không bị đẩy lên GitHub.)
-
----
-
-## 5. Phản hồi TỨC THÌ cho các lệnh (Cloudflare Workers, miễn phí)
-
-GitHub chạy theo lịch nên lệnh bị trễ ~5 phút. Để bot **nhắn "Đang truy thông tin..." ngay lập tức**
-và trả kết quả trong 1–2 giây, dùng webhook Cloudflare:
-
-1. Đăng ký [dash.cloudflare.com](https://dash.cloudflare.com) (miễn phí).
-2. Vào **Workers & Pages** → **Create** → **Create Worker** → đặt tên (ví dụ `buh-bot`) → **Deploy**.
-3. Bấm **Edit code**, xoá code mẫu, dán toàn bộ nội dung file `cloudflare-worker.js` vào → **Deploy**.
-4. Vào tab **Settings** → **Variables and Secrets** → **Add** → tạo biến:
-   - Name: `BOT_TOKEN`  |  Value: token bot Telegram.
-5. Lấy URL worker của bạn, dạng: `https://buh-bot.<tên-tài-khoản>.workers.dev`
-6. Đăng ký webhook bằng cách mở trình duyệt:
-   ```
-   https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://buh-bot.<tên-tài-khoản>.workers.dev/webhook
-   ```
-   (thay `<BOT_TOKEN>` và đúng URL worker của bạn). Trang trả về `{"ok":true}` là thành công.
-
-Xong! Từ giờ gửi `/full7d`, `/full30d`, `/find ...` là bot phản hồi ngay.
-GitHub Actions vẫn chạy song song để **đẩy thông báo mới** như bình thường.
