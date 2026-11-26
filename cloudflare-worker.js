@@ -1,68 +1,37 @@
 /**
- * HUB Monitor Pro v2.0 — Cloudflare Workers Telegram Webhook (Phản hồi tức thì!)
- *
- * Hệ sinh thái Đại học Ngân hàng TP.HCM (HUB) + Không gian riêng Khoa HTTTQL (MIS):
- *   1. 💻 Khoa HTTTQL (MIS)        : khoahtttql.hub.edu.vn/thong-bao & Sự kiện hoạt động
- *   2. 📝 Phòng Khảo thí & ĐBCL    : phongktdbcl.hub.edu.vn/thong-bao
- *   3. 🎓 Phòng Quản lý Đào tạo    : phongdaotao.hub.edu.vn/thong-bao & Trang chủ (Tin tức / Thực tập)
- *   4. 🤝 Trung tâm SV & QHDN (SCC): scc.hub.edu.vn/thong-bao
- *   5. 🏫 Cổng Chính HUB           : hub.edu.vn/thong-bao
- *   6. 💰 Phòng Tài chính - Kế toán: phongketoan.hub.edu.vn/thong-bao
- *   7. 🏛️ Cổng Sinh viên Online    : online.hub.edu.vn
- *   8. 📘 Fanpage Khoa HTTTQL      : facebook.com/htttql.hub (kết nối nhanh + tuỳ chọn RSS)
- *
- * Tính năng nổi bật:
- *   - Giao diện nút bấm Inline Menu chuẩn App (giống ảnh mẫu, cập nhật tại chỗ không spam chat).
- *   - Đọc nhanh toàn văn bài viết + trích xuất nút tải PDF trực tiếp ngay trong Telegram!
- *   - Tìm kiếm tiếng Việt không dấu (nhắn thẳng từ khoá hoặc dùng /find hoặc chip 1 chạm).
- *   - Lọc theo cổng HUB, lọc theo chủ đề, Radar tin Khoa HTTTQL (MIS), Bản tin tổng hợp tuần.
- *   - Hỗ trợ Inline Mode (@viethubnews_bot <từ khoá>) để chia sẻ thông báo ngay trong nhóm lớp!
- *   - Endpoint /setup tự động cài Webhook + nút "Menu" xanh + danh sách 16 lệnh chỉ bằng 1 click!
- *
- * Cách triển khai nhanh:
- *   1. Dán toàn bộ file này vào Cloudflare Worker -> Deploy.
- *   2. Settings -> Variables and Secrets -> thêm BOT_TOKEN = token Telegram Bot.
- *      (Tuỳ chọn: thêm SETUP_SECRET để khoá /setup, hoặc FB_HTTTQL_RSS_URL cho RSS Fanpage)
- *   3. Mở trình duyệt vào: https://<ten-worker>.workers.dev/setup
- *      -> Tự động cài đặt Webhook + Nút Menu xanh + Danh sách lệnh!
+ * HUB Monitor — Cloudflare Workers Telegram Bot & 5-Minute Auto-Push Cron
+ * 7 official portals of Ho Chi Minh University of Banking (HUB), Online HUB Priority #1.
  */
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const VN_OFFSET = 7 * 3600 * 1000;
 const PAGE_SIZE = 5;
-const CACHE_TTL_SEC = 120;
+const CACHE_TTL_SEC = 90;
+const ONLINE_CACHE_TTL_SEC = 45;
+const ONLINE_SWR_MAX_AGE_MS = 6 * 60 * 1000;
+const DETAIL_CACHE_TTL_SEC = 300;
+const LINE = "────────────";
 
 const ONLINE_HOME = "https://online.hub.edu.vn/";
+const ONLINE_ALT = "https://online.hub.edu.vn/Default.aspx";
 const ONLINE_GRID_TARGET = "ctl00$ContentPlaceHolder1$ctl00$ctl00$ctl00$ctl00$grvNewsgroup";
 const ONLINE_ITEM_RE = /title="Messages\.aspx\?ID=(\d+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<span[^>]*class="inputdate"[^>]*>(\d{1,2}\/\d{1,2}\/\d{4})<\/span>/g;
-const FB_HTTTQL_URL = "https://www.facebook.com/htttql.hub";
+
 const AUTHOR_NAME = "Huynh Viet";
 const AUTHOR_FB_URL = "https://www.facebook.com/profile.php?id=61591547874181";
 
 const SOURCES = [
   {
-    key: "htttql",
-    code: "mis",
-    name: "Khoa HTTTQL (MIS)",
-    short: "Khoa HTTTQL",
-    emoji: "💻",
-    type: "dnn_notif",
-    url: "https://khoahtttql.hub.edu.vn/thong-bao",
-    base: "https://khoahtttql.hub.edu.vn",
-    section: "thong-bao",
+    key: "online",
+    code: "onl",
+    name: "Online HUB",
+    short: "Online HUB",
+    emoji: "🏛️",
+    type: "asp_grid",
+    url: ONLINE_HOME,
+    base: "https://online.hub.edu.vn",
+    section: "",
     priority: 1,
-  },
-  {
-    key: "htttql_ev",
-    code: "mise",
-    name: "Khoa HTTTQL — Sự kiện",
-    short: "Sự kiện MIS",
-    emoji: "🚀",
-    type: "dnn_news",
-    url: "https://khoahtttql.hub.edu.vn/thong-bao-su-kien/su-kien-hoat-dong",
-    base: "https://khoahtttql.hub.edu.vn",
-    section: "thong-bao-su-kien/su-kien-hoat-dong",
-    priority: 2,
   },
   {
     key: "ktdbcl",
@@ -74,43 +43,43 @@ const SOURCES = [
     url: "https://phongktdbcl.hub.edu.vn/thong-bao",
     base: "https://phongktdbcl.hub.edu.vn",
     section: "thong-bao",
-    priority: 3,
+    priority: 2,
   },
   {
     key: "daotao",
     code: "dt",
-    name: "Phòng Quản lý Đào tạo",
+    name: "Phòng Đào tạo",
     short: "Phòng Đào tạo",
     emoji: "🎓",
     type: "dnn_notif",
     url: "https://phongdaotao.hub.edu.vn/thong-bao",
     base: "https://phongdaotao.hub.edu.vn",
     section: "thong-bao",
-    priority: 4,
+    priority: 3,
   },
   {
     key: "daotao_news",
     code: "dtn",
-    name: "Đào tạo — Tin & Thực tập",
-    short: "Đào tạo (Tin tức)",
+    name: "Đào tạo · Tin & Thực tập",
+    short: "Đào tạo (Tin)",
     emoji: "📰",
     type: "dnn_pdt_home",
     url: "https://phongdaotao.hub.edu.vn/",
     base: "https://phongdaotao.hub.edu.vn",
     section: "tin-tuc-su-kien",
-    priority: 5,
+    priority: 4,
   },
   {
     key: "scc",
     code: "scc",
-    name: "Trung tâm SV & QHDN (SCC)",
-    short: "Trung tâm SV (SCC)",
+    name: "Trung tâm SV (SCC)",
+    short: "Trung tâm SV",
     emoji: "🤝",
     type: "dnn_news",
     url: "https://scc.hub.edu.vn/thong-bao",
     base: "https://scc.hub.edu.vn",
     section: "thong-bao",
-    priority: 6,
+    priority: 5,
   },
   {
     key: "hub",
@@ -122,94 +91,65 @@ const SOURCES = [
     url: "https://hub.edu.vn/thong-bao",
     base: "https://hub.edu.vn",
     section: "thong-bao",
-    priority: 7,
+    priority: 6,
   },
   {
     key: "ketoan",
     code: "ktc",
-    name: "Phòng Tài chính - Kế toán",
-    short: "Tài chính - Kế toán",
+    name: "Tài chính - Kế toán",
+    short: "Tài chính - KT",
     emoji: "💰",
     type: "dnn_notif",
     url: "https://phongketoan.hub.edu.vn/thong-bao",
     base: "https://phongketoan.hub.edu.vn",
     section: "thong-bao",
-    priority: 8,
-  },
-  {
-    key: "online",
-    code: "onl",
-    name: "Cổng Sinh viên Online",
-    short: "Online HUB",
-    emoji: "🏛️",
-    type: "asp_grid",
-    url: ONLINE_HOME,
-    base: "https://online.hub.edu.vn",
-    section: "",
-    priority: 9,
+    priority: 7,
   },
 ];
 
 const SOURCE_BY_KEY = Object.fromEntries(SOURCES.map((s) => [s.key, s]));
-const FB_SOURCE = {
-  key: "fb_htttql",
-  code: "fb",
-  name: "Fanpage Khoa HTTTQL (FB)",
-  short: "Fanpage MIS",
-  emoji: "📘",
-  type: "fb_feed",
-  url: FB_HTTTQL_URL,
-  base: "https://www.facebook.com",
-  section: "",
-  priority: 0,
-};
-SOURCE_BY_KEY.fb_htttql = FB_SOURCE;
 
-// Ánh xạ mã ngắn -> cấu hình giải mã bài viết chi tiết (giữ callback_data < 64 bytes)
 const DETAIL_ROUTES = {
-  mis:  { source: "htttql",      base: "https://khoahtttql.hub.edu.vn",  section: "thong-bao" },
-  mise: { source: "htttql_ev",   base: "https://khoahtttql.hub.edu.vn",  section: "thong-bao-su-kien/su-kien-hoat-dong" },
-  kt:   { source: "ktdbcl",      base: "https://phongktdbcl.hub.edu.vn", section: "thong-bao" },
-  dt:   { source: "daotao",      base: "https://phongdaotao.hub.edu.vn", section: "thong-bao" },
-  dtn:  { source: "daotao_news", base: "https://phongdaotao.hub.edu.vn", section: "tin-tuc-su-kien" },
-  dtt:  { source: "daotao_news", base: "https://phongdaotao.hub.edu.vn", section: "xet-tot-nghiep" },
-  scc:  { source: "scc",         base: "https://scc.hub.edu.vn",         section: "thong-bao" },
-  hub:  { source: "hub",         base: "https://hub.edu.vn",             section: "thong-bao" },
-  ktc:  { source: "ketoan",      base: "https://phongketoan.hub.edu.vn", section: "thong-bao" },
-  onl:  { source: "online",      base: "https://online.hub.edu.vn",      section: "" },
+  onl: { source: "online",      base: "https://online.hub.edu.vn",      section: "" },
+  kt:  { source: "ktdbcl",      base: "https://phongktdbcl.hub.edu.vn", section: "thong-bao" },
+  dt:  { source: "daotao",      base: "https://phongdaotao.hub.edu.vn", section: "thong-bao" },
+  dtn: { source: "daotao_news", base: "https://phongdaotao.hub.edu.vn", section: "tin-tuc-su-kien" },
+  dtt: { source: "daotao_news", base: "https://phongdaotao.hub.edu.vn", section: "xet-tot-nghiep" },
+  scc: { source: "scc",         base: "https://scc.hub.edu.vn",         section: "thong-bao" },
+  hub: { source: "hub",         base: "https://hub.edu.vn",             section: "thong-bao" },
+  ktc: { source: "ketoan",      base: "https://phongketoan.hub.edu.vn", section: "thong-bao" },
 };
 
 const TOPICS = {
-  exam:    { icon: "📝", label: "Lịch thi & Khảo thí",     tag: "#LichThi" },
-  tuition: { icon: "💰", label: "Học phí & Tài chính",     tag: "#HocPhi" },
-  scholar: { icon: "🏆", label: "Học bổng & Giải thưởng",  tag: "#HocBong" },
-  grad:    { icon: "🎓", label: "Tốt nghiệp & Thực tập",   tag: "#TotNghiep" },
-  reg:     { icon: "📋", label: "Đào tạo & Học phần",      tag: "#DaoTao" },
-  student: { icon: "🤝", label: "Sinh viên & Sự kiện",     tag: "#SinhVien" },
-  urgent:  { icon: "🚨", label: "Tin khẩn & Cần lưu ý",    tag: "#KhanCap" },
-  general: { icon: "📌", label: "Thông báo HUB",           tag: "#ThongBaoHUB" },
+  exam:    { icon: "📝", label: "Lịch thi & Khảo thí",  tag: "#LichThi" },
+  tuition: { icon: "💰", label: "Học phí & Tài chính",  tag: "#HocPhi" },
+  scholar: { icon: "🏆", label: "Học bổng & Giải thưởng", tag: "#HocBong" },
+  grad:    { icon: "🎓", label: "Tốt nghiệp & Thực tập", tag: "#TotNghiep" },
+  reg:     { icon: "📋", label: "Đào tạo & Học phần",   tag: "#DaoTao" },
+  student: { icon: "🤝", label: "Sinh viên & Sự kiện",  tag: "#SinhVien" },
+  urgent:  { icon: "🚨", label: "Khẩn & Lưu ý",         tag: "#KhanCap" },
+  general: { icon: "📌", label: "Thông báo HUB",        tag: "#ThongBaoHUB" },
 };
 
 const BOT_COMMANDS = [
-  { command: "menu",    description: "📌 Mở bảng điều khiển nút bấm (Full tính năng)" },
-  { command: "latest",  description: "🔥 Thông báo mới nhất từ tất cả cổng HUB" },
-  { command: "update",  description: "⚡ Kiểm tra nhanh tin mới nhất (real-time)" },
-  { command: "full7d",  description: "📅 Tổng hợp thông báo 7 ngày gần nhất" },
-  { command: "full30d", description: "🗓️ Tổng hợp thông báo 30 ngày gần nhất" },
-  { command: "find",    description: "🔎 Tìm kiếm không dấu (VD: /find hoc bong)" },
-  { command: "htttql",  description: "💻 Không gian Khoa HTTTQL (MIS) & Fanpage" },
-  { command: "thi",     description: "📝 Lịch thi, phúc khảo & Phòng Khảo thí" },
-  { command: "daotao",  description: "🎓 Phòng Đào tạo (Thông báo, Thực tập, Tốt nghiệp)" },
-  { command: "scc",     description: "🤝 Trung tâm SV (Ngoại trú, Học bổng, Sự kiện)" },
-  { command: "hocphi",  description: "💰 Học phí, miễn giảm & Phòng Kế toán" },
-  { command: "hocbong", description: "🏆 Săn học bổng & khen thưởng toàn HUB" },
-  { command: "digest",  description: "📰 Bản tin tổng hợp tuần theo chủ đề" },
-  { command: "portals", description: "🔗 Mở nhanh LMS, ĐKTC, eStudent, Fanpage MIS" },
-  { command: "status",  description: "📊 Kiểm tra trạng thái 7 cổng HUB (real-time)" },
-  { command: "notify",  description: "🔔 Bật / Tắt nhận thông báo tự động" },
-  { command: "clear",   description: "🧹 Xoá lịch sử trò chuyện gần đây" },
-  { command: "author",  description: "👨‍💻 Thông tin tác giả Huynh Viet & Liên hệ" },
-  { command: "help",    description: "❓ Hướng dẫn sử dụng Bot HUB Pro" },
+  { command: "menu",    description: "Bảng điều khiển chính" },
+  { command: "online",  description: "Online HUB (Ưu tiên #1)" },
+  { command: "latest",  description: "Tin mới nhất (7 cổng HUB)" },
+  { command: "full7d",  description: "Thông báo 7 ngày gần nhất" },
+  { command: "full30d", description: "Thông báo 30 ngày gần nhất" },
+  { command: "find",    description: "Tìm kiếm không dấu" },
+  { command: "thi",     description: "Lịch thi & Khảo thí" },
+  { command: "daotao",  description: "Phòng Đào tạo" },
+  { command: "scc",     description: "Trung tâm Sinh viên (SCC)" },
+  { command: "hocphi",  description: "Học phí & Tài chính" },
+  { command: "hocbong", description: "Học bổng & Khen thưởng" },
+  { command: "digest",  description: "Tổng hợp theo chủ đề" },
+  { command: "portals", description: "Tiện ích sinh viên HUB" },
+  { command: "status",  description: "Trạng thái 7 cổng HUB" },
+  { command: "notify",  description: "Bật / Tắt thông báo tự động" },
+  { command: "clear",   description: "Dọn lịch sử trò chuyện" },
+  { command: "author",  description: "Thông tin tác giả" },
+  { command: "help",    description: "Hướng dẫn nhanh" },
 ];
 
 const QUICK_SEARCH_CHIPS = [
@@ -217,10 +157,10 @@ const QUICK_SEARCH_CHIPS = [
   { label: "🏆 học bổng",    kw: "hoc bong" },
   { label: "💰 học phí",     kw: "hoc phi" },
   { label: "🎓 tốt nghiệp",  kw: "tot nghiep" },
+  { label: "💼 thực tập",    kw: "thuc tap" },
   { label: "🏠 ngoại trú",   kw: "ngoai tru" },
   { label: "🔎 phúc khảo",   kw: "phuc khao" },
   { label: "📋 đăng ký",     kw: "dang ky" },
-  { label: "💻 HTTTQL/MIS",  kw: "he thong thong tin" },
   { label: "🇬🇧 tiếng Anh",  kw: "tieng anh" },
 ];
 
@@ -320,15 +260,9 @@ function vnNowLabel() {
   return `${hh}:${mm} · ${fmtDate(now)}`;
 }
 
-function isMisRelated(title, sourceKey = "") {
-  if (sourceKey === "htttql" || sourceKey === "htttql_ev" || sourceKey === "fb_htttql") return true;
-  const padded = " " + stripAccents(title).toLowerCase() + " ";
-  const kws = [
-    "he thong thong tin", "htttql", " mis ", "mis -", "- mis",
-    "do an nganh", "cong nghe thong tin", "thuong mai dien tu",
-    "tri tue nhan tao", "khoa hoc du lieu", "fintech", "chuyen doi so",
-  ];
-  return kws.some((k) => padded.includes(k));
+function vnTimeOnly() {
+  const now = new Date(Date.now() + VN_OFFSET);
+  return `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 function isUrgentTitle(title) {
@@ -369,7 +303,7 @@ function classifyItem(title, sourceKey = "") {
     "thoi hoc", "cam nang", "ren luyen",
   ].some((k) => s.includes(k))) return { key: "reg", ...TOPICS.reg };
 
-  if (sourceKey === "scc" || sourceKey === "htttql_ev" || [
+  if (sourceKey === "scc" || [
     "ngoai tru", "the sinh vien", "tham quan", "kien tap", "huy dong",
     "toa dam", "hoi thao", "tuyen dung", "viec lam", "doan", "tu van", "thu moi",
   ].some((k) => s.includes(k))) return { key: "student", ...TOPICS.student };
@@ -393,38 +327,54 @@ function prettyFileName(url, idx) {
       .replace(/\s+/g, " ")
       .trim();
     if (clean.length >= 5) {
-      return clean.length > 34 ? clean.slice(0, 31) + "..." : clean;
+      return clean.length > 30 ? clean.slice(0, 27) + "..." : clean;
     }
-  } catch (_) {
-    // ignore decode errors
-  }
+  } catch (_) {}
   return `Tài liệu #${idx + 1}`;
 }
 
 // ---------------------------------------------------------------- HTTP & Edge Cache
 
-async function fetchHTML(url, formData = null, cookie = "") {
+async function fetchHTML(url, formData = null, cookie = "", timeoutMs = 7500, retries = 1) {
   const headers = {
     "User-Agent": UA,
     "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
     "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
   };
   if (cookie) headers["Cookie"] = cookie;
-  const opts = { headers };
+  const baseOpts = { headers };
   if (formData) {
-    opts.method = "POST";
+    baseOpts.method = "POST";
     headers["Content-Type"] = "application/x-www-form-urlencoded";
-    opts.body = new URLSearchParams(formData).toString();
+    baseOpts.body = new URLSearchParams(formData).toString();
   }
-  const res = await fetch(url, opts);
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  const sc = res.headers.get("set-cookie") || "";
-  const sess = sc ? sc.split(";")[0].trim() : "";
-  const text = await res.text();
-  return { html: text, cookie: sess, url: res.url };
+
+  let lastErr = null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const targetUrl = (attempt > 1 && url === ONLINE_HOME && !formData) ? ONLINE_ALT : url;
+      const res = await fetch(targetUrl, { ...baseOpts, signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const sc = res.headers.get("set-cookie") || "";
+      const sess = sc ? sc.split(";")[0].trim() : "";
+      const text = await res.text();
+      return { html: text, cookie: sess, url: res.url };
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = e && e.name === "AbortError" ? new Error(`Timeout ${timeoutMs}ms`) : e;
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 250 * attempt));
+      }
+    }
+  }
+  throw lastErr;
 }
 
-async function cachedJson(cacheKey, fetcher, bypassCache = false) {
+async function cachedJson(cacheKey, fetcher, bypassCache = false, ttlSec = CACHE_TTL_SEC) {
   const fakeUrl = new Request("https://hub-cache.internal/" + encodeURIComponent(cacheKey));
   try {
     if (!bypassCache && typeof caches !== "undefined" && caches.default) {
@@ -440,7 +390,7 @@ async function cachedJson(cacheKey, fetcher, bypassCache = false) {
       const resp = new Response(JSON.stringify(data), {
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": `public, max-age=${CACHE_TTL_SEC}`,
+          "Cache-Control": `public, max-age=${ttlSec}`,
         },
       });
       await caches.default.put(fakeUrl, resp);
@@ -557,10 +507,71 @@ function parseDnnNews(html, src) {
   return items;
 }
 
-async function fetchSource(src, onlinePages = 1) {
-  const t0 = Date.now();
+async function saveOnlineLkg(env, items) {
+  if (!env || !env.SUBSCRIBERS_KV || !items || !items.length) return;
   try {
-    const first = await fetchHTML(src.url);
+    const prev = await env.SUBSCRIBERS_KV.get("cache:online_lkg", { type: "json" }).catch(() => null);
+    const prevIds = prev && Array.isArray(prev.items) ? prev.items.map((x) => x.id).join(",") : "";
+    const curIds = items.slice(0, 20).map((x) => x.id).join(",");
+    const ageMs = prev && prev.savedAt ? Date.now() - prev.savedAt : 9e9;
+    if (prevIds !== curIds || ageMs > 15 * 60 * 1000) {
+      await env.SUBSCRIBERS_KV.put(
+        "cache:online_lkg",
+        JSON.stringify({ savedAt: Date.now(), items: items.slice(0, 20) })
+      );
+    }
+  } catch (_) {}
+}
+
+async function loadOnlineLkgEntry(env) {
+  if (!env || !env.SUBSCRIBERS_KV) return null;
+  try {
+    const prev = await env.SUBSCRIBERS_KV.get("cache:online_lkg", { type: "json" });
+    if (prev && Array.isArray(prev.items) && prev.items.length) return prev;
+  } catch (_) {}
+  return null;
+}
+
+async function loadOnlineLkg(env) {
+  const entry = await loadOnlineLkgEntry(env);
+  return entry ? entry.items : [];
+}
+
+async function putEdgeCache(cacheKey, data, ttlSec) {
+  try {
+    if (typeof caches !== "undefined" && caches.default) {
+      const fakeUrl = new Request("https://hub-cache.internal/" + encodeURIComponent(cacheKey));
+      await caches.default.put(
+        fakeUrl,
+        new Response(JSON.stringify(data), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": `public, max-age=${ttlSec}`,
+          },
+        })
+      );
+    }
+  } catch (_) {}
+}
+
+async function getEdgeCache(cacheKey) {
+  try {
+    if (typeof caches !== "undefined" && caches.default) {
+      const fakeUrl = new Request("https://hub-cache.internal/" + encodeURIComponent(cacheKey));
+      const hit = await caches.default.match(fakeUrl);
+      if (hit) return await hit.json();
+    }
+  } catch (_) {}
+  return null;
+}
+
+async function fetchSource(src, onlinePages = 1, env = null, cronMode = false) {
+  const t0 = Date.now();
+  const isOnline = src.key === "online";
+  const timeoutMs = isOnline ? (cronMode ? 12000 : 5000) : 7500;
+  try {
+    // Ưu tiên #1 Online HUB: timeout nhanh (5s interactive / 12s cron) + retry luân phiên / và /Default.aspx
+    const first = await fetchHTML(src.url, null, "", timeoutMs, isOnline ? 2 : 1);
     let items = [];
     if (src.type === "asp_grid") {
       items = parseOnlineItems(first.html);
@@ -573,7 +584,9 @@ async function fetchSource(src, onlinePages = 1) {
               __EVENTTARGET: ONLINE_GRID_TARGET,
               __EVENTARGUMENT: "Page$" + p,
             }),
-            first.cookie
+            first.cookie,
+            5500,
+            1
           );
           fields = getHiddenFields(next.html);
           const pItems = parseOnlineItems(next.html);
@@ -583,119 +596,59 @@ async function fetchSource(src, onlinePages = 1) {
           break;
         }
       }
+      if (items.length && env) {
+        await saveOnlineLkg(env, items);
+      }
     } else if (src.type === "dnn_notif") {
       items = parseDnnNotif(first.html, src);
     } else {
       items = parseDnnNews(first.html, src);
     }
     items.sort((a, b) => b.ts - a.ts);
-    return { key: src.key, ok: true, ms: Date.now() - t0, items };
+    return { key: src.key, ok: true, ms: Date.now() - t0, items, fallback: false };
   } catch (e) {
-    return { key: src.key, ok: false, ms: Date.now() - t0, error: String(e.message || e), items: [] };
-  }
-}
-
-function parseFbFeedPayload(rawText) {
-  const trimmed = String(rawText || "").trim();
-  const items = [];
-  const seen = new Set();
-  const pushPost = (id, title, body, link, dateObj) => {
-    const cleanT = cleanText(title || body || "").slice(0, 220);
-    if (!cleanT) return;
-    const d = dateObj && !isNaN(dateObj.getTime()) ? dateObj : vnToday();
-    const vnD = new Date(d.getTime() + VN_OFFSET);
-    const utcDay = new Date(Date.UTC(vnD.getUTCFullYear(), vnD.getUTCMonth(), vnD.getUTCDate()));
-    const safeId = String(id || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(-24) || extractDnnId(link + cleanT);
-    if (seen.has(safeId)) return;
-    seen.add(safeId);
-    items.push({
-      id: safeId,
-      source: "fb_htttql",
-      code: "fb",
-      title: cleanT,
-      fullText: cleanText(body || title || "").slice(0, 1400),
-      date: fmtDate(utcDay),
-      ts: utcDay.getTime(),
-      url: link || FB_HTTTQL_URL,
-    });
-  };
-
-  // JSON Feed (rss.app JSON / Meta Graph API JSON)
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      const obj = JSON.parse(trimmed);
-      const arr = Array.isArray(obj) ? obj : (obj.items || obj.data || []);
-      for (const it of arr) {
-        const msg = it.message || it.content_text || it.summary || it.description || it.title || "";
-        const title = it.title || msg.split(/\r?\n/)[0] || msg;
-        const link = it.permalink_url || it.url || it.link || FB_HTTTQL_URL;
-        const dtStr = it.created_time || it.date_published || it.date_modified || it.pubDate || "";
-        pushPost(it.id || link, title, msg, link, dtStr ? new Date(dtStr) : null);
+    if (isOnline && env) {
+      const lkg = await loadOnlineLkg(env);
+      if (lkg.length) {
+        return {
+          key: src.key,
+          ok: true,
+          fallback: true,
+          ms: Date.now() - t0,
+          error: "Bản đệm nhanh",
+          items: lkg,
+        };
       }
-      return items.sort((a, b) => b.ts - a.ts);
-    } catch (_) {}
-  }
-
-  // RSS 2.0 <item> or Atom <entry>
-  const stripCdata = (s) => String(s || "").replace(/^<!\[CDATA\[([\s\S]*?)\]\]>$/i, "$1").trim();
-  const tagVal = (block, tag) => {
-    const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-    return m ? stripCdata(m[1]) : "";
-  };
-
-  const blocks = trimmed.match(/<(?:item|entry)\b[\s\S]*?<\/(?:item|entry)>/gi) || [];
-  for (const b of blocks) {
-    const title = tagVal(b, "title");
-    const desc = tagVal(b, "content:encoded") || tagVal(b, "content") || tagVal(b, "description") || tagVal(b, "summary");
-    let link = tagVal(b, "link");
-    if (!link) {
-      const lm = b.match(/<link[^>]+href=["']([^"']+)["']/i);
-      if (lm) link = decodeEntities(lm[1]);
     }
-    const guid = tagVal(b, "guid") || tagVal(b, "id") || link;
-    const pub = tagVal(b, "pubDate") || tagVal(b, "published") || tagVal(b, "updated");
-    pushPost(guid, title || desc, desc || title, decodeEntities(link), pub ? new Date(pub) : null);
-  }
-  return items.sort((a, b) => b.ts - a.ts);
-}
-
-async function fetchFbSource(env) {
-  const t0 = Date.now();
-  const rssUrl = env && env.FB_HTTTQL_RSS_URL ? String(env.FB_HTTTQL_RSS_URL).trim() : "";
-  const fbToken = env && env.FB_ACCESS_TOKEN ? String(env.FB_ACCESS_TOKEN).trim() : "";
-  const fbPageId = env && env.FB_PAGE_ID ? String(env.FB_PAGE_ID).trim() : "htttql.hub";
-
-  if (!rssUrl && !fbToken) {
-    return { key: "fb_htttql", configured: false, ok: false, ms: 0, error: "Chưa kết nối nguồn RSS/Graph API", items: [] };
-  }
-
-  try {
-    let raw = "";
-    if (fbToken) {
-      const apiUrl = `https://graph.facebook.com/v21.0/${encodeURIComponent(fbPageId)}/posts?fields=id,message,created_time,permalink_url&limit=20&access_token=${encodeURIComponent(fbToken)}`;
-      const res = await fetch(apiUrl, { headers: { "User-Agent": UA } });
-      if (!res.ok) throw new Error("Graph API HTTP " + res.status);
-      raw = await res.text();
-    } else {
-      const res = await fetch(rssUrl, { headers: { "User-Agent": UA, "Accept": "application/rss+xml, application/atom+xml, application/json, application/xml, text/xml, */*" } });
-      if (!res.ok) throw new Error("RSS HTTP " + res.status);
-      raw = await res.text();
-    }
-    const items = parseFbFeedPayload(raw).slice(0, 25);
-    return { key: "fb_htttql", configured: true, ok: true, ms: Date.now() - t0, items };
-  } catch (e) {
-    return { key: "fb_htttql", configured: true, ok: false, ms: Date.now() - t0, error: String(e.message || e), items: [] };
+    return { key: src.key, ok: false, fallback: false, ms: Date.now() - t0, error: String(e.message || e), items: [] };
   }
 }
 
-async function fetchAllSources(onlinePages = 1, bypassCache = false, env = null) {
-  const hasFb = Boolean(env && (env.FB_HTTTQL_RSS_URL || env.FB_ACCESS_TOKEN));
-  const key = `all_sources_p${onlinePages}_fb${hasFb ? 1 : 0}`;
+async function fetchAllSources(onlinePages = 1, bypassCache = false, env = null, ctx = null) {
+  const key = `all_sources_v3_p${onlinePages}`;
   return await cachedJson(
     key,
     async () => {
-      const jobs = SOURCES.map((s) => fetchSource(s, s.key === "online" ? onlinePages : 1));
-      if (hasFb) jobs.push(fetchFbSource(env));
+      const jobs = SOURCES.map(async (s) => {
+        if (s.key === "online" && onlinePages === 1 && !bypassCache && env) {
+          const lkg = await loadOnlineLkgEntry(env);
+          if (lkg && lkg.savedAt && (Date.now() - lkg.savedAt) <= ONLINE_SWR_MAX_AGE_MS) {
+            if (ctx && typeof ctx.waitUntil === "function") {
+              ctx.waitUntil(
+                fetchSource(s, 1, env, false)
+                  .then((r) => {
+                    if (r.ok && !r.fallback && r.items.length) {
+                      return putEdgeCache("src_v3_online_p1", r.items, ONLINE_CACHE_TTL_SEC);
+                    }
+                  })
+                  .catch(() => {})
+              );
+            }
+            return { key: "online", ok: true, ms: 20, items: lkg.items, fallback: false };
+          }
+        }
+        return fetchSource(s, s.key === "online" ? onlinePages : 1, env, false);
+      });
       const resList = await Promise.all(jobs);
       const bySource = {};
       const health = [];
@@ -704,39 +657,55 @@ async function fetchAllSources(onlinePages = 1, bypassCache = false, env = null)
         health.push({
           key: r.key,
           ok: r.ok,
+          fallback: Boolean(r.fallback),
           ms: r.ms,
           count: r.items.length,
           latestDate: r.items[0] ? r.items[0].date : "—",
           error: r.error || "",
         });
       }
-      return { bySource, health, hasFb, fetchedAt: vnNowLabel() };
+      return { bySource, health, fetchedAt: vnNowLabel() };
     },
-    bypassCache
+    bypassCache,
+    CACHE_TTL_SEC
   );
 }
 
-async function fetchSingleSourceCached(sourceKey, onlinePages = 3, bypassCache = false, env = null) {
-  if (sourceKey === "fb_htttql") {
-    return await cachedJson(
-      "src_fb_htttql",
-      async () => {
-        const r = await fetchFbSource(env);
-        return r.items;
-      },
-      bypassCache
-    );
-  }
+async function fetchSingleSourceCached(sourceKey, onlinePages = 1, bypassCache = false, env = null, ctx = null) {
   const src = SOURCE_BY_KEY[sourceKey];
   if (!src) return [];
-  const key = `src_${sourceKey}_p${onlinePages}`;
+  const key = `src_v3_${sourceKey}_p${onlinePages}`;
+  const ttl = sourceKey === "online" ? ONLINE_CACHE_TTL_SEC : CACHE_TTL_SEC;
+
+  // Stale-While-Revalidate cho Online HUB: trả ngay từ Edge/KV (<50ms) và tự làm mới nền!
+  if (sourceKey === "online" && onlinePages === 1 && !bypassCache) {
+    const edgeHit = await getEdgeCache(key);
+    if (edgeHit && edgeHit.length) return edgeHit;
+    const lkg = await loadOnlineLkgEntry(env);
+    if (lkg && lkg.savedAt && (Date.now() - lkg.savedAt) <= ONLINE_SWR_MAX_AGE_MS) {
+      if (ctx && typeof ctx.waitUntil === "function") {
+        ctx.waitUntil(
+          fetchSource(src, 1, env, false)
+            .then((r) => {
+              if (r.ok && !r.fallback && r.items.length) {
+                return putEdgeCache(key, r.items, ONLINE_CACHE_TTL_SEC);
+              }
+            })
+            .catch(() => {})
+        );
+      }
+      return lkg.items;
+    }
+  }
+
   return await cachedJson(
     key,
     async () => {
-      const r = await fetchSource(src, onlinePages);
+      const r = await fetchSource(src, onlinePages, env, false);
       return r.items.sort((a, b) => b.ts - a.ts);
     },
-    bypassCache
+    bypassCache,
+    ttl
   );
 }
 
@@ -748,13 +717,10 @@ function mergeAndDedupe(bySource, days = null) {
     cutoffTs = c.getTime();
   }
   const orderedKeys = [...SOURCES].sort((a, b) => a.priority - b.priority).map((s) => s.key);
-  if (bySource.fb_htttql && bySource.fb_htttql.length) {
-    orderedKeys.unshift("fb_htttql");
-  }
   const byFp = new Map();
   const out = [];
-
   const FOURTEEN_DAYS_MS = 14 * 86400 * 1000;
+
   for (const k of orderedKeys) {
     for (const it of (bySource[k] || [])) {
       if (cutoffTs !== null && it.ts < cutoffTs) continue;
@@ -786,47 +752,41 @@ function mergeAndDedupe(bySource, days = null) {
 
 // ---------------------------------------------------------------- Instant Detail & PDF Reader
 
-async function fetchArticleDetail(code, id, env = null) {
-  if (code === "fb") {
-    const posts = await fetchSingleSourceCached("fb_htttql", 1, false, env);
-    const found = posts.find((p) => p.id === id);
-    if (!found) throw new Error("Không tìm thấy bài viết Fanpage này.");
-    return {
-      source: "fb_htttql",
-      sourceName: FB_SOURCE.name,
-      sourceEmoji: FB_SOURCE.emoji,
-      title: found.title,
-      date: found.date,
-      sender: "Fanpage Khoa HTTTQL — HUB",
-      url: found.url,
-      webUrl: found.url,
-      bodyText: found.fullText || found.title,
-      deadline: extractDeadline(found.fullText || found.title),
-      pdfs: [],
-      downloads: [],
-    };
-  }
+async function fetchArticleDetailUncached(code, id) {
   const route = DETAIL_ROUTES[code];
   if (!route) throw new Error("Mã nguồn không hợp lệ");
   const src = SOURCE_BY_KEY[route.source];
 
   if (code === "onl") {
     const msgUrl = `https://online.hub.edu.vn/Messages.aspx?id=${id}`;
-    const r1 = await fetch(msgUrl, {
-      redirect: "manual",
-      headers: { "User-Agent": UA, "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8" },
-    });
+    const c1 = new AbortController();
+    const t1 = setTimeout(() => c1.abort(), 6000);
+    let r1;
+    try {
+      r1 = await fetch(msgUrl, {
+        redirect: "manual",
+        signal: c1.signal,
+        headers: {
+          "User-Agent": UA,
+          "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+          "Accept-Encoding": "gzip, deflate, br",
+        },
+      });
+    } finally {
+      clearTimeout(t1);
+    }
     const sc = r1.headers.get("set-cookie") || "";
     const cookie = sc ? sc.split(";")[0].trim() : "";
     let dHtml = "";
     if (r1.status >= 300 && r1.status < 400) {
       const loc = r1.headers.get("location") || ONLINE_HOME;
       const nextUrl = loc.startsWith("http") ? loc : new URL(loc, ONLINE_HOME).href;
-      const r2 = await fetchHTML(nextUrl, null, cookie);
+      const r2 = await fetchHTML(nextUrl, null, cookie, 6000, 1);
       dHtml = r2.html;
     } else {
       dHtml = await r1.text();
     }
+
     const mSub = dHtml.match(/id="[^"]*lblMessageSubject"[^>]*>([\s\S]*?)<\/span>/i);
     const mDate = dHtml.match(/id="[^"]*lblDate"[^>]*>([\s\S]*?)<\/span>/i);
     const mSender = dHtml.match(/id="[^"]*lblSenderName"[^>]*>([\s\S]*?)<\/span>/i);
@@ -911,7 +871,7 @@ async function fetchArticleDetail(code, id, env = null) {
     .replace(/<table[^>]*filedinhkem_table[\s\S]*?<\/table>/gi, "")
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n");
-  let bodyText = decodeEntities(cleanedHtml.replace(/<[^>]+>/g, " "))
+  const bodyText = decodeEntities(cleanedHtml.replace(/<[^>]+>/g, " "))
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n+/g, "\n")
     .replace(/\bFile đính kèm\b[\s\S]*$/i, "")
@@ -930,7 +890,17 @@ async function fetchArticleDetail(code, id, env = null) {
     deadline: extractDeadline(title + " " + bodyText),
     pdfs,
     downloads,
+    extraLinks: [],
   };
+}
+
+async function fetchArticleDetail(code, id, bypassCache = false) {
+  return await cachedJson(
+    `detail_v3_${code}_${id}`,
+    () => fetchArticleDetailUncached(code, id),
+    bypassCache,
+    DETAIL_CACHE_TTL_SEC
+  );
 }
 
 // ---------------------------------------------------------------- Telegram API Wrappers
@@ -973,7 +943,6 @@ async function editMsg(env, chatId, messageId, text, replyMarkup = null) {
   };
   if (replyMarkup) payload.reply_markup = replyMarkup;
   const r = await tgApi(env, "editMessageText", payload);
-  // Fallback nếu tin cũ quá hạn hoặc không sửa được -> gửi tin mới
   if (!r.ok && !String(r.description || "").includes("message is not modified")) {
     return await sendMsg(env, chatId, text, replyMarkup);
   }
@@ -1144,14 +1113,14 @@ async function listAllSubscribers(env) {
 
 function formatBroadcastPayload(bodyText, urgent = false) {
   const header = urgent
-    ? "🚨 <b>THÔNG BÁO KHẨN TỪ QUẢN TRỊ VIÊN</b>"
-    : "📣 <b>THÔNG BÁO TỪ QUẢN TRỊ VIÊN — HUB MONITOR PRO</b>";
+    ? "🚨 <b>THÔNG BÁO KHẨN</b>"
+    : "📣 <b>THÔNG BÁO TỪ QUẢN TRỊ VIÊN</b>";
   return [
     header,
-    "━━━━━━━━━━━━━━━━━━━━",
+    LINE,
     escapeHtml(bodyText),
     "",
-    `📅 <code>${vnNowLabel()}</code> · 👤 Admin ${AUTHOR_NAME}`,
+    `<code>${vnNowLabel()}</code> · Admin ${AUTHOR_NAME}`,
   ].join("\n");
 }
 
@@ -1161,8 +1130,8 @@ async function executeBroadcast(env, draft) {
   const formatted = formatBroadcastPayload(draft.text || "", Boolean(draft.urgent));
   const markup = {
     inline_keyboard: [[
-      { text: "📌 Mở Menu HUB", callback_data: "m:home" },
-      { text: "🔕 Tắt thông báo", callback_data: "user:notify_off" },
+      { text: "📌 Menu", callback_data: "m:home" },
+      { text: "🔕 Tắt TB", callback_data: "user:notify_off" },
     ]],
   };
 
@@ -1198,34 +1167,287 @@ async function adminHomeView(env, adminId) {
   const users = await listAllSubscribers(env);
   const active = users.filter((u) => u.subscribed !== false && !u.blocked).length;
   const muted = users.length - active;
+  const lastScan = env.SUBSCRIBERS_KV
+    ? await env.SUBSCRIBERS_KV.get("state:last_scan", { type: "json" }).catch(() => null)
+    : null;
+  const scanLine = lastScan
+    ? `⚡ Tự động 5p: ${lastScan.okCount}/${lastScan.totalSources} cổng (<code>${lastScan.at}</code>)`
+    : "⚡ Tự động 5p: Cloudflare Cron";
 
   const text = [
-    "🛡️ <b>BẢNG QUẢN TRỊ ADMIN — HUB MONITOR PRO</b>",
-    `👤 <b>Quản trị viên:</b> ${AUTHOR_NAME} (<code>${escapeHtml(adminId)}</code>)`,
-    "━━━━━━━━━━━━━━━━━━━━",
-    `👥 <b>Tổng người dùng đã /start:</b> <b>${users.length}</b>`,
-    `🔔 <b>Đang bật nhận thông báo:</b> <b>${active}</b>`,
-    `🔕 <b>Đã tắt TB / chặn bot:</b> <b>${muted}</b>`,
-    `⏱ Cập nhật: ${vnNowLabel()}`,
+    "<b>Quản trị · HUB Monitor</b>",
+    LINE,
+    `👤 ${AUTHOR_NAME} · <code>${escapeHtml(adminId)}</code>`,
+    `👥 Người dùng: <b>${users.length}</b> (🔔 ${active} · 🔕 ${muted})`,
+    scanLine,
     "",
-    "💡 Mẹo nhanh: Gõ <code>/bc Nội dung...</code> (hoặc gửi ảnh kèm chú thích <code>/bc ...</code>) để tạo bản xem trước &amp; phát sóng ngay!",
+    "Lệnh nhanh: <code>/bc nội dung</code> · <code>/bc! gửi ngay</code>",
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
-      [{ text: `📢 Gửi thông báo ngay cho TẤT CẢ (${active} người)`, callback_data: "adm:bc_ask" }],
+      [{ text: `📢 Phát thông báo (${active})`, callback_data: "adm:bc_ask" }],
       [
-        { text: "🚨 Gửi thông báo KHẨN", callback_data: "adm:bc_urgent_ask" },
-        { text: "🧪 Test gửi riêng Admin", callback_data: "adm:test_self" },
+        { text: "🚨 Báo khẩn", callback_data: "adm:bc_urgent_ask" },
+        { text: "🔄 Quét ngay", callback_data: "adm:scan_now" },
       ],
       [
-        { text: `👥 Danh sách người dùng (${users.length})`, callback_data: "adm:users:1" },
-        { text: "🔄 Làm mới thống kê", callback_data: "adm:home" },
+        { text: `👥 Người dùng (${users.length})`, callback_data: "adm:users:1" },
+        { text: "🧪 Test Admin", callback_data: "adm:test_self" },
       ],
-      [{ text: "🏠 Quay lại Menu chính", callback_data: "m:home" }],
+      [
+        { text: "🔄 Làm mới", callback_data: "adm:home" },
+        { text: "⬅️ Menu", callback_data: "m:home" },
+      ],
     ],
   };
   return { text, markup };
+}
+
+// ---------------------------------------------------------------- Real-time 5-Minute Auto-Scanner (Cloudflare Cron)
+
+function buildAutoPushCard(item, extraSources = [], detail = null) {
+  const cat = classifyItem(item.title, item.source);
+  const urgent = isUrgentTitle(item.title);
+  const src = SOURCE_BY_KEY[item.source] || { emoji: "🏛️", name: item.source, short: item.source };
+  const headIcon = urgent ? "🚨" : cat.icon;
+
+  const badges = ["<b>TIN MỚI</b>", `<code>${cat.tag}</code>`];
+  if (urgent) badges.push("<b>LƯU Ý</b>");
+
+  const srcNames = [`${src.emoji} ${src.name}`];
+  for (const es of (extraSources || [])) {
+    const cfg = SOURCE_BY_KEY[es];
+    if (cfg && es !== item.source) srcNames.push(`${cfg.emoji} ${cfg.short}`);
+  }
+
+  const lines = [
+    `${headIcon} <b>${escapeHtml(item.title)}</b>`,
+    badges.join(" · "),
+    LINE,
+    `Nguồn: ${escapeHtml(srcNames.join(" · "))}`,
+    `Ngày: <code>${escapeHtml(item.date)}</code>`,
+  ];
+
+  const pdfs = (detail && detail.pdfs) || [];
+  const downloads = (detail && detail.downloads) || [];
+  const extraLinks = (detail && detail.extraLinks) || [];
+  if (detail && detail.sender) lines.push(`Đơn vị: ${escapeHtml(detail.sender)}`);
+  if (detail && detail.deadline) lines.push(`Hạn: <b>${escapeHtml(detail.deadline)}</b>`);
+
+  const attParts = [];
+  if (pdfs.length) attParts.push(`${pdfs.length} PDF`);
+  if (downloads.length) attParts.push(`${downloads.length} tệp`);
+  if (attParts.length) lines.push(`Đính kèm: ${attParts.join(" · ")}`);
+
+  const bodyText = (detail && detail.bodyText) || "";
+  if (bodyText.length > 30 && !bodyText.toLowerCase().startsWith("sinh viên xem") && !bodyText.toLowerCase().startsWith("sv xem chi tiết")) {
+    const preview = bodyText.length > 170 ? bodyText.slice(0, 167) + "..." : bodyText;
+    lines.push("", escapeHtml(preview));
+  }
+
+  const kb = [];
+  const cbView = `v:${item.code}:${item.id}`;
+  if (new TextEncoder().encode(cbView).length <= 64) {
+    kb.push([{
+      text: (pdfs.length || downloads.length) ? "📄 Xem chi tiết & PDF" : "📄 Đọc nhanh",
+      callback_data: cbView,
+    }]);
+  }
+  const row2 = [];
+  if (pdfs.length) {
+    row2.push({ text: "📥 Mở PDF", url: pdfs[0] });
+  } else if (downloads.length) {
+    row2.push({ text: "📦 Tải tệp", url: downloads[0] });
+  } else if (extraLinks.length) {
+    row2.push({ text: "🔗 Chi tiết", url: extraLinks[0].url });
+  } else {
+    row2.push({ text: `${src.emoji} ${src.short}`, callback_data: `src:${item.source}:1` });
+  }
+  row2.push({ text: "🌐 Mở web", url: item.url });
+  kb.push(row2);
+
+  kb.push([
+    item.source === "online"
+      ? { text: "🔥 Tất cả cổng", callback_data: "list:all:latest:1" }
+      : { text: "🏛️ Online HUB", callback_data: "src:online:1" },
+    { text: "📌 Menu", callback_data: "m:home" },
+  ]);
+  return { text: lines.join("\n"), markup: { inline_keyboard: kb } };
+}
+
+async function runAutoMonitorCron(env, forceRecordScan = false) {
+  if (!env || !env.BOT_TOKEN || !env.SUBSCRIBERS_KV) {
+    return { ok: false, reason: "Missing BOT_TOKEN or SUBSCRIBERS_KV" };
+  }
+
+  // Quét song song 7 cổng HUB (Online HUB #1; chế độ cron cho phép chờ 8.5s và không dùng LKG fallback)
+  const jobs = SOURCES.map((s) => fetchSource(s, 1, null, true));
+  const resList = await Promise.all(jobs);
+
+  const bySource = {};
+  let okCount = 0;
+  let onlineOk = false;
+  for (const r of resList) {
+    bySource[r.key] = r.items;
+    if (r.ok && r.items.length > 0) {
+      okCount += 1;
+      if (r.key === "online") {
+        onlineOk = true;
+        await saveOnlineLkg(env, r.items);
+      }
+    }
+  }
+
+  const prevState = (await env.SUBSCRIBERS_KV.get("state:seen_v1", { type: "json" }).catch(() => null)) || {
+    sources: {},
+    seenTitles: {},
+  };
+  const sourcesState = prevState.sources || {};
+  const seenTitles = prevState.seenTitles || {};
+  const todayIso = new Date(Date.now() + VN_OFFSET).toISOString().slice(0, 10);
+
+  // Dọn cổng đã gỡ bỏ và seenTitles quá 21 ngày
+  let stateChanged = false;
+  const activeKeys = new Set(SOURCES.map((s) => s.key));
+  for (const sk of Object.keys(sourcesState)) {
+    if (!activeKeys.has(sk)) {
+      delete sourcesState[sk];
+      stateChanged = true;
+    }
+  }
+  const cutoffIso = new Date(Date.now() + VN_OFFSET - 21 * 86400 * 1000).toISOString().slice(0, 10);
+  for (const fp of Object.keys(seenTitles)) {
+    if (!seenTitles[fp] || String(seenTitles[fp].at || "") < cutoffIso) {
+      delete seenTitles[fp];
+      stateChanged = true;
+    }
+  }
+
+  const orderedKeys = [...SOURCES].sort((a, b) => a.priority - b.priority).map((s) => s.key);
+  const candidates = [];
+
+  for (const skey of orderedKeys) {
+    const items = bySource[skey] || [];
+    if (!items.length) continue;
+    const srcSeen = sourcesState[skey];
+    if (!srcSeen || Object.keys(srcSeen).length === 0) {
+      sourcesState[skey] = Object.fromEntries(items.map((it) => [it.id, it.date]));
+      for (const it of items) {
+        const fp = normalizeTitleKey(it.title);
+        if (fp && !seenTitles[fp]) seenTitles[fp] = { source: skey, at: todayIso };
+      }
+      stateChanged = true;
+      continue;
+    }
+    for (const it of items) {
+      if (!srcSeen[it.id]) {
+        candidates.push(it);
+      }
+    }
+  }
+
+  // Khử trùng chéo cổng (Online HUB #1 ưu tiên giữ làm tin chính)
+  const batchByFp = new Map();
+  const toNotify = [];
+  for (const it of candidates) {
+    const fp = normalizeTitleKey(it.title);
+    if (fp && seenTitles[fp]) {
+      sourcesState[it.source][it.id] = it.date;
+      stateChanged = true;
+      continue;
+    }
+    if (fp && batchByFp.has(fp)) {
+      const primary = batchByFp.get(fp);
+      primary.extraSources.push(it.source);
+      primary.allRefs.push([it.source, it.id, it.date]);
+      continue;
+    }
+    const entry = { item: it, fp, extraSources: [], allRefs: [[it.source, it.id, it.date]] };
+    if (fp) batchByFp.set(fp, entry);
+    toNotify.push(entry);
+  }
+
+  let pushedNotices = 0;
+  let totalDelivered = 0;
+  if (toNotify.length > 0) {
+    const users = await listAllSubscribers(env);
+    const adminIds = await getAdminIds(env);
+    const targetSet = new Set(
+      users.filter((u) => u.subscribed !== false && !u.blocked).map((u) => String(u.id))
+    );
+    adminIds.forEach((id) => targetSet.add(String(id)));
+    const targets = Array.from(targetSet);
+
+    for (const entry of toNotify.reverse().slice(0, 5)) {
+      const it = entry.item;
+      let detail = null;
+      try {
+        detail = await fetchArticleDetail(it.code, it.id, true);
+      } catch (_) {}
+      const card = buildAutoPushCard(it, entry.extraSources, detail);
+
+      let sentThis = 0;
+      for (let i = 0; i < targets.length; i += 20) {
+        const chunk = targets.slice(i, i + 20);
+        await Promise.all(
+          chunk.map(async (cid) => {
+            const r = await sendMsg(env, cid, card.text, card.markup);
+            if (r && r.ok) {
+              sentThis += 1;
+            } else {
+              const desc = String((r && r.description) || "").toLowerCase();
+              if (desc.includes("blocked") || desc.includes("deactivated") || desc.includes("kicked")) {
+                await setUserSubscription(env, cid, false, true);
+              }
+            }
+          })
+        );
+      }
+      if (sentThis > 0 || targets.length === 0) {
+        for (const [sk, sid, sdate] of entry.allRefs) {
+          sourcesState[sk][sid] = sdate;
+        }
+        if (entry.fp) seenTitles[entry.fp] = { source: it.source, at: todayIso };
+        pushedNotices += 1;
+        totalDelivered += sentThis;
+        stateChanged = true;
+      }
+    }
+  }
+
+  if (stateChanged) {
+    for (const sk of Object.keys(sourcesState)) {
+      const entries = Object.entries(sourcesState[sk]);
+      if (entries.length > 150) {
+        entries.sort((a, b) => {
+          const da = parseDate(a[1]);
+          const db = parseDate(b[1]);
+          return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+        });
+        sourcesState[sk] = Object.fromEntries(entries.slice(0, 150));
+      }
+    }
+    await env.SUBSCRIBERS_KV.put("state:seen_v1", JSON.stringify({ sources: sourcesState, seenTitles }));
+  }
+
+  const prevScan = await env.SUBSCRIBERS_KV.get("state:last_scan", { type: "json" }).catch(() => null);
+  const scanAgeMs = prevScan && prevScan.ts ? Date.now() - prevScan.ts : 9e9;
+  if (forceRecordScan || pushedNotices > 0 || scanAgeMs > 30 * 60 * 1000) {
+    await env.SUBSCRIBERS_KV.put(
+      "state:last_scan",
+      JSON.stringify({
+        ts: Date.now(),
+        at: vnNowLabel(),
+        okCount,
+        totalSources: SOURCES.length,
+        onlineOk,
+        pushedNotices,
+      })
+    );
+  }
+
+  return { ok: true, okCount, totalSources: SOURCES.length, onlineOk, pushedNotices, totalDelivered };
 }
 
 async function adminUsersView(env, page = 1) {
@@ -1236,35 +1458,35 @@ async function adminUsersView(env, page = 1) {
   const slice = users.slice((safePage - 1) * perPage, safePage * perPage);
 
   const lines = [
-    "👥 <b>DANH SÁCH NGƯỜI DÙNG BOT</b>",
-    `Trang ${safePage}/${totalPages} · Tổng ${users.length} người`,
-    "━━━━━━━━━━━━━━━━━━━━",
+    "<b>Người dùng Bot</b>",
+    `Trang ${safePage}/${totalPages} · ${users.length} tài khoản`,
+    LINE,
   ];
 
   if (!slice.length) {
-    lines.push("\nChưa có người dùng nào được ghi nhận.");
+    lines.push("\nChưa có người dùng.");
   } else {
     slice.forEach((u, idx) => {
       const n = (safePage - 1) * perPage + idx + 1;
       const st = u.blocked ? "🚫" : (u.subscribed === false ? "🔕" : "🔔");
-      const uname = u.username ? ` (@${escapeHtml(u.username)})` : "";
+      const uname = u.username ? ` @${escapeHtml(u.username)}` : "";
       const joined = u.joinedAt ? String(u.joinedAt).slice(0, 10) : "—";
       lines.push(`<b>${n}.</b> ${st} <b>${escapeHtml(u.name)}</b>${uname}`);
-      lines.push(`   └ ID: <code>${escapeHtml(u.id)}</code> · Tham gia: <code>${joined}</code>`);
+      lines.push(`   <code>${escapeHtml(u.id)}</code> · ${joined}`);
     });
   }
 
   const kb = [];
   if (totalPages > 1) {
     const nav = [];
-    if (safePage > 1) nav.push({ text: "⬅️ Trước", callback_data: `adm:users:${safePage - 1}` });
-    nav.push({ text: `📄 ${safePage}/${totalPages}`, callback_data: "noop" });
-    if (safePage < totalPages) nav.push({ text: "Sau ➡️", callback_data: `adm:users:${safePage + 1}` });
+    if (safePage > 1) nav.push({ text: "‹ Trước", callback_data: `adm:users:${safePage - 1}` });
+    nav.push({ text: `${safePage}/${totalPages}`, callback_data: "noop" });
+    if (safePage < totalPages) nav.push({ text: "Sau ›", callback_data: `adm:users:${safePage + 1}` });
     kb.push(nav);
   }
   kb.push([
     { text: "🔄 Làm mới", callback_data: `adm:users:${safePage}` },
-    { text: "🛡️ Quay lại Admin", callback_data: "adm:home" },
+    { text: "⬅️ Admin", callback_data: "adm:home" },
   ]);
   return { text: lines.join("\n"), markup: { inline_keyboard: kb } };
 }
@@ -1276,23 +1498,19 @@ async function userNotifyView(env, chatId) {
     if (u && u.subscribed === false) sub = false;
   }
   const text = [
-    "🔔 <b>CÀI ĐẶT NHẬN THÔNG BÁO TỰ ĐỘNG</b>",
-    "━━━━━━━━━━━━━━━━━━━━",
-    `Trạng thái hiện tại: ${sub ? "🟢 <b>ĐANG BẬT</b>" : "🔕 <b>ĐANG TẮT</b>"}`,
-    "",
-    sub
-      ? "Bạn sẽ tự động nhận thông báo ngay khi các cổng trường HUB đăng tin mới hoặc khi Quản trị viên gửi thông báo quan trọng."
-      : "Bạn đang tạm tắt thông báo tự động. Bấm nút bên dưới bất cứ lúc nào để bật lại!",
+    "<b>Thông báo tự động</b>",
+    LINE,
+    `Trạng thái: ${sub ? "🟢 <b>Đang bật</b>" : "🔕 <b>Đang tắt</b>"}`,
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
       [
         sub
-          ? { text: "🔕 Tắt thông báo tự động", callback_data: "user:notify_off" }
-          : { text: "🔔 Bật lại thông báo tự động", callback_data: "user:notify_on" },
+          ? { text: "🔕 Tắt thông báo", callback_data: "user:notify_off" }
+          : { text: "🔔 Bật thông báo", callback_data: "user:notify_on" },
       ],
-      [{ text: "📌 Quay lại Menu chính", callback_data: "m:home" }],
+      [{ text: "⬅️ Menu", callback_data: "m:home" }],
     ],
   };
   return { text, markup };
@@ -1301,7 +1519,7 @@ async function userNotifyView(env, chatId) {
 async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
   const safeCount = Math.min(Math.max(10, count || 100), 300);
   const startId = Math.max(1, upToMsgId - safeCount + 1);
-  // Telegram deleteMessages BẮT BUỘC danh sách message_ids phải tăng dần (strictly increasing)!
+  // Telegram deleteMessages bắt buộc message_ids tăng dần nghiêm ngặt
   const batches = [];
   for (let end = upToMsgId; end >= startId; end -= 100) {
     const beg = Math.max(startId, end - 99);
@@ -1315,11 +1533,8 @@ async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
       chat_id: chatId,
       message_ids: ids,
     });
-    if (r && r.ok) {
-      anyOk = true;
-    }
+    if (r && r.ok) anyOk = true;
   }
-  // Fallback xoá từng tin gần nhất nếu deleteMessages gặp lỗi ngoài ý muốn
   if (!anyOk) {
     const fallbackStart = Math.max(1, upToMsgId - 29);
     const jobs = [];
@@ -1330,48 +1545,43 @@ async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
   }
 }
 
-// ---------------------------------------------------------------- Views & Keyboards
+// ---------------------------------------------------------------- Minimalist Views & Keyboards
 
 function mainMenuView() {
   const text = [
-    "📌 <b>BẢNG ĐIỀU KHIỂN — HUB MONITOR PRO</b>",
-    "🎓 Hệ sinh thái ĐH Ngân hàng TP.HCM · Khoa HTTTQL (MIS)",
-    "━━━━━━━━━━━━━━━━━━━━",
-    `🟢 <b>Trạng thái BOT:</b> Đang hoạt động · <code>${vnNowLabel()}</code>`,
-    "⚡ <b>Tức thì:</b> Đọc nội dung &amp; tải PDF ngay trong Telegram",
-    `👨‍💻 <b>Author:</b> <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a> (MIS · HUB)`,
-    "",
-    "👇 Vui lòng chọn menu bên dưới:",
+    "<b>HUB Monitor</b>",
+    LINE,
+    `🟢 Trực tuyến · <code>${vnNowLabel()}</code>`,
+    `Tác giả: <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a>`,
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
-      [{ text: "🔥 Thông báo mới nhất (Tất cả cổng HUB)", callback_data: "list:all:latest:1" }],
+      [{ text: "🏛️ Online HUB · Tin mới nhất", callback_data: "src:online:1" }],
       [
-        { text: "📅 Tin 7 ngày", callback_data: "list:all:7:1" },
-        { text: "🗓️ Tin 30 ngày", callback_data: "list:all:30:1" },
+        { text: "🔥 Tất cả cổng", callback_data: "list:all:latest:1" },
+        { text: "📅 7 ngày", callback_data: "list:all:7:1" },
       ],
       [
-        { text: "💻 Khoa HTTTQL (MIS)", callback_data: "m:mis" },
-        { text: "📝 Lịch thi & ĐBCL", callback_data: "src:ktdbcl:1" },
+        { text: "🗓️ 30 ngày", callback_data: "list:all:30:1" },
+        { text: "🏢 7 cổng HUB", callback_data: "m:portals" },
       ],
       [
-        { text: "🏢 Chọn cổng HUB (7)", callback_data: "m:portals" },
-        { text: "🏷️ Lọc theo chủ đề", callback_data: "m:topics" },
+        { text: "🏷️ Chủ đề", callback_data: "m:topics" },
+        { text: "🔎 Tìm kiếm", callback_data: "m:search" },
       ],
       [
-        { text: "🔎 Tìm kiếm nhanh", callback_data: "m:search" },
-        { text: "📰 Bản tin tuần", callback_data: "digest:7" },
+        { text: "📰 Tổng hợp", callback_data: "digest:7" },
+        { text: "🔗 Tiện ích", callback_data: "m:links" },
       ],
       [
-        { text: "🔗 Cổng tiện ích SV", callback_data: "m:links" },
-        { text: "📊 Trạng thái HUB", callback_data: "status" },
+        { text: "📊 Trạng thái", callback_data: "status" },
+        { text: "👤 Tác giả", callback_data: "m:author" },
       ],
       [
-        { text: "❓ Hướng dẫn", callback_data: "m:help" },
-        { text: "👨‍💻 Tác giả", callback_data: "m:author" },
+        { text: "❓ Trợ giúp", callback_data: "m:help" },
+        { text: "🧹 Dọn chat", callback_data: "clear:ask" },
       ],
-      [{ text: "🧹 Dọn sạch lịch sử trò chuyện (/clear)", callback_data: "clear:ask" }],
     ],
   };
   return { text, markup };
@@ -1379,54 +1589,16 @@ function mainMenuView() {
 
 function authorView() {
   const text = [
-    "👨‍💻 <b>THÔNG TIN TÁC GIẢ — HUB MONITOR PRO</b>",
-    "━━━━━━━━━━━━━━━━━━━━",
-    `👤 <b>Author:</b> <b>${AUTHOR_NAME}</b>`,
-    "🎓 <b>Đơn vị:</b> Sinh viên Khoa <b>Hệ thống Thông tin Quản lý (HTTTQL / MIS)</b> — Trường ĐH Ngân hàng TP.HCM (HUB)",
-    "🤖 <b>Dự án:</b> <b>HUB Monitor Pro v2.0</b> — Hệ thống tự động cập nhật &amp; tra cứu thông báo toàn trường HUB",
-    "🛠️ <b>Hệ thống:</b> Telegram Bot API · Cloudflare Edge · Tự động 24/7",
-    "",
-    "💬 Cần góp ý tính năng mới, báo lỗi hoặc kết nối giao lưu, bấm nút Facebook bên dưới để liên hệ mình nhé!",
+    "<b>Tác giả</b>",
+    LINE,
+    `👤 <b>${AUTHOR_NAME}</b>`,
+    "🤖 HUB Monitor · Tự động cập nhật thông báo HUB 24/7",
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
-      [{ text: `📘 Facebook Author — ${AUTHOR_NAME}`, url: AUTHOR_FB_URL }],
-      [
-        { text: "💻 Khoa HTTTQL (MIS)", callback_data: "m:mis" },
-        { text: "📘 Fanpage Khoa MIS", url: FB_HTTTQL_URL },
-      ],
-      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
-    ],
-  };
-  return { text, markup };
-}
-
-function misHubView() {
-  const text = [
-    "💻 <b>KHOA HỆ THỐNG THÔNG TIN QUẢN LÝ (MIS — HUB)</b>",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "🎯 <b>Không gian dành riêng cho sinh viên HTTTQL:</b>",
-    "• 📘 Mở nhanh <b>bài viết mới nhất trên Fanpage Khoa HTTTQL</b>",
-    "• 📢 Tự động theo dõi <b>Thông báo &amp; Sự kiện Website Khoa HTTTQL</b>",
-    "• 🌟 <b>Radar MIS:</b> Gom mọi tin liên quan HTTTQL, CNTT, Đồ án, TMĐT, AI từ toàn trường HUB",
-    "",
-    "👇 Chọn mục bạn muốn xem:",
-  ].join("\n");
-
-  const markup = {
-    inline_keyboard: [
-      [{ text: "📘 Bài viết mới nhất Fanpage Khoa HTTTQL", url: FB_HTTTQL_URL }],
-      [
-        { text: "📢 Thông báo Web Khoa", callback_data: "src:htttql:1" },
-        { text: "🚀 Sự kiện & Tọa đàm MIS", callback_data: "src:htttql_ev:1" },
-      ],
-      [{ text: "🌟 Radar tin MIS trên toàn trường HUB", callback_data: "mis:radar:1" }],
-      [
-        { text: "🌐 Website Khoa HTTTQL", url: "https://khoahtttql.hub.edu.vn/" },
-        { text: "🎓 Sinh viên Khoa MIS", url: "https://khoahtttql.hub.edu.vn/sinh-vien" },
-      ],
-      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
+      [{ text: `📘 Facebook · ${AUTHOR_NAME}`, url: AUTHOR_FB_URL }],
+      [{ text: "⬅️ Menu", callback_data: "m:home" }],
     ],
   };
   return { text, markup };
@@ -1434,37 +1606,30 @@ function misHubView() {
 
 function portalsMenuView() {
   const text = [
-    "🏢 <b>CHỌN CỔNG THÔNG TIN — HỆ SINH THÁI HUB</b>",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "Tất cả các website chính thức của ĐH Ngân hàng TP.HCM đều được tích hợp &amp; theo dõi tự động mỗi 5 phút.",
-    "",
-    "👇 Chọn cổng bạn muốn xem riêng:",
+    "<b>Cổng thông tin HUB</b>",
+    LINE,
+    "7 nguồn chính thức · Tự động cập nhật 5 phút/lần",
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
-      [{ text: "🔥 Xem gộp TẤT CẢ các cổng HUB", callback_data: "list:all:latest:1" }],
+      [{ text: "🏛️ Online HUB · Ưu tiên #1", callback_data: "src:online:1" }],
       [
-        { text: "📘 Fanpage Khoa MIS (FB)", url: FB_HTTTQL_URL },
-        { text: "💻 Web Khoa HTTTQL", callback_data: "src:htttql:1" },
+        { text: "📝 Khảo thí & ĐBCL", callback_data: "src:ktdbcl:1" },
+        { text: "🎓 Phòng Đào tạo", callback_data: "src:daotao:1" },
       ],
       [
-        { text: "🚀 Sự kiện MIS", callback_data: "src:htttql_ev:1" },
-        { text: "📝 Phòng Khảo thí & ĐBCL", callback_data: "src:ktdbcl:1" },
+        { text: "📰 Đào tạo · Tin tức", callback_data: "src:daotao_news:1" },
+        { text: "🤝 Trung tâm SV", callback_data: "src:scc:1" },
       ],
       [
-        { text: "🎓 Phòng Đào tạo (TB)", callback_data: "src:daotao:1" },
-        { text: "📰 Đào tạo (Tin & Thực tập)", callback_data: "src:daotao_news:1" },
-      ],
-      [
-        { text: "🤝 Trung tâm SV (SCC)", callback_data: "src:scc:1" },
         { text: "🏫 Cổng Chính HUB", callback_data: "src:hub:1" },
+        { text: "💰 Tài chính - KT", callback_data: "src:ketoan:1" },
       ],
       [
-        { text: "💰 Tài chính - Kế toán", callback_data: "src:ketoan:1" },
-        { text: "🏛️ Cổng SV Online", callback_data: "src:online:1" },
+        { text: "🔥 Xem gộp tất cả", callback_data: "list:all:latest:1" },
+        { text: "⬅️ Menu", callback_data: "m:home" },
       ],
-      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
   };
   return { text, markup };
@@ -1472,30 +1637,29 @@ function portalsMenuView() {
 
 function topicsMenuView() {
   const text = [
-    "🏷️ <b>LỌC THÔNG BÁO THEO CHỦ ĐỀ</b>",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "Bot tự động phân loại thông báo từ toàn bộ 7 cổng HUB theo từng chuyên mục sinh viên hay tìm nhất.",
-    "",
-    "👇 Chọn chủ đề muốn lọc:",
+    "<b>Chủ đề thông báo</b>",
+    LINE,
+    "Chọn nhóm nội dung cần lọc",
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
-      [{ text: "🚨 Tin khẩn / Hủy HP / Cảnh báo / Chú ý", callback_data: "tp:urgent:1" }],
       [
-        { text: "📝 Lịch thi & Khảo thí", callback_data: "tp:exam:1" },
-        { text: "💰 Học phí & Miễn giảm", callback_data: "tp:tuition:1" },
+        { text: "🚨 Khẩn & Lưu ý", callback_data: "tp:urgent:1" },
+        { text: "📝 Lịch thi", callback_data: "tp:exam:1" },
       ],
       [
-        { text: "🏆 Học bổng & Giải thưởng", callback_data: "tp:scholar:1" },
-        { text: "🎓 Tốt nghiệp & Thực tập", callback_data: "tp:grad:1" },
+        { text: "💰 Học phí", callback_data: "tp:tuition:1" },
+        { text: "🏆 Học bổng", callback_data: "tp:scholar:1" },
       ],
       [
-        { text: "📋 Đăng ký HP & Đào tạo", callback_data: "tp:reg:1" },
-        { text: "🤝 Sinh viên & Sự kiện", callback_data: "tp:student:1" },
+        { text: "🎓 Tốt nghiệp", callback_data: "tp:grad:1" },
+        { text: "📋 Đào tạo", callback_data: "tp:reg:1" },
       ],
-      [{ text: "🌟 Tin liên quan Khoa HTTTQL (MIS)", callback_data: "mis:radar:1" }],
-      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
+      [
+        { text: "🤝 Sinh viên", callback_data: "tp:student:1" },
+        { text: "⬅️ Menu", callback_data: "m:home" },
+      ],
     ],
   };
   return { text, markup };
@@ -1503,12 +1667,9 @@ function topicsMenuView() {
 
 function searchMenuView() {
   const text = [
-    "🔎 <b>TÌM KIẾM THÔNG MINH TOÀN HỆ THỐNG HUB</b>",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "✨ <b>Hỗ trợ tìm KHÔNG CẦN DẤU</b> (gõ <code>hoc bong</code> vẫn ra Học bổng!)",
-    "💬 <b>Mẹo cực nhanh:</b> Bạn có thể <b>nhắn thẳng từ khoá</b> bất kỳ vào khung chat (không cần gõ <code>/find</code>) là bot tự tìm ngay!",
-    "",
-    "👇 Chọn nhanh từ khoá phổ biến hoặc nhập tự do:",
+    "<b>Tìm kiếm nhanh</b>",
+    LINE,
+    "Hỗ trợ không dấu · Nhắn trực tiếp từ khoá vào chat",
   ].join("\n");
 
   const rows = [];
@@ -1520,45 +1681,43 @@ function searchMenuView() {
       }))
     );
   }
-  rows.push([{ text: "⌨️ Nhập từ khoá khác...", callback_data: "m:search_ask" }]);
-  rows.push([{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }]);
+  rows.push([
+    { text: "⌨️ Nhập từ khoá", callback_data: "m:search_ask" },
+    { text: "⬅️ Menu", callback_data: "m:home" },
+  ]);
   return { text, markup: { inline_keyboard: rows } };
 }
 
 function quickLinksView() {
   const text = [
-    "🔗 <b>CỔNG TIỆN ÍCH SINH VIÊN HUB</b>",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "Truy cập 1 chạm tới toàn bộ hệ thống học tập, đào tạo &amp; khảo thí của ĐH Ngân hàng TP.HCM:",
+    "<b>Tiện ích sinh viên HUB</b>",
+    LINE,
+    "Truy cập nhanh hệ thống học tập &amp; đào tạo",
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
       [
         { text: "🏛️ Online HUB", url: "https://online.hub.edu.vn/" },
-        { text: "📚 LMS Học trực tuyến", url: "https://lms.hub.edu.vn/" },
+        { text: "📚 LMS HUB", url: "https://lms.hub.edu.vn/" },
       ],
       [
         { text: "📝 Đăng ký tín chỉ", url: "https://dangkytinchi.hub.edu.vn/" },
-        { text: "🎓 eStudent HUB", url: "https://estudent.hub.edu.vn/" },
-      ],
-      [
-        { text: "💻 Web Khoa HTTTQL", url: "https://khoahtttql.hub.edu.vn/" },
-        { text: "📘 Fanpage Khoa MIS", url: FB_HTTTQL_URL },
+        { text: "🎓 eStudent", url: "https://estudent.hub.edu.vn/" },
       ],
       [
         { text: "📝 Phòng Khảo thí", url: "https://phongktdbcl.hub.edu.vn/thong-bao" },
         { text: "🎓 Phòng Đào tạo", url: "https://phongdaotao.hub.edu.vn/" },
       ],
       [
-        { text: "🤝 Trung tâm SV (SCC)", url: "https://scc.hub.edu.vn/thong-bao" },
-        { text: "💰 Tài chính - Kế toán", url: "https://phongketoan.hub.edu.vn/thong-bao" },
+        { text: "🤝 Trung tâm SV", url: "https://scc.hub.edu.vn/thong-bao" },
+        { text: "💰 Tài chính - KT", url: "https://phongketoan.hub.edu.vn/thong-bao" },
       ],
       [
         { text: "📖 Thư viện HUB", url: "https://library.hub.edu.vn/" },
         { text: "📜 Tra cứu văn bằng", url: "https://hub.edu.vn/tra-cuu-van-bang" },
       ],
-      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
+      [{ text: "⬅️ Menu", callback_data: "m:home" }],
     ],
   };
   return { text, markup };
@@ -1566,40 +1725,26 @@ function quickLinksView() {
 
 function helpView() {
   const text = [
-    "❓ <b>HƯỚNG DẪN SỬ DỤNG — HUB MONITOR PRO</b>",
-    "━━━━━━━━━━━━━━━━━━━━",
-    "🔔 <b>1. Tự động báo tin mới (Auto-Push):</b>",
-    "Bot chạy ngầm 24/7 (mỗi 5 phút) trên toàn bộ <b>7 cổng HUB + Khoa HTTTQL</b>. Hễ trường đăng bài mới, bot tự trích xuất PDF &amp; đẩy thẻ thông báo có nút bấm ngay lập tức!",
+    "<b>Hướng dẫn nhanh</b>",
+    LINE,
+    "• Tự động gửi tin mới từ 7 cổng HUB mỗi 5 phút",
+    "• Nhắn trực tiếp từ khoá không dấu để tìm kiếm",
+    "• Bấm số <b>1–5</b> dưới danh sách để đọc nhanh &amp; tải PDF",
     "",
-    "⌨️ <b>2. Các lệnh nhanh (bấm nút Menu màu xanh góc trái):</b>",
-    "• <code>/menu</code> — Mở bảng điều khiển nút bấm",
-    "• <code>/latest</code> hoặc <code>/update</code> — Tin mới nhất toàn HUB",
-    "• <code>/full7d</code> · <code>/full30d</code> — Tổng hợp 7 / 30 ngày",
-    "• <code>/htttql</code> — Không gian Khoa HTTTQL (MIS) &amp; Fanpage",
-    "• <code>/thi</code> · <code>/daotao</code> · <code>/scc</code> · <code>/hocphi</code> · <code>/hocbong</code>",
-    "• <code>/find &lt;từ khoá&gt;</code> — Tìm kiếm không dấu toàn HUB",
-    "• <code>/digest</code> — Bản tin tổng hợp tuần theo chủ đề",
-    "• <code>/portals</code> — Mở nhanh LMS, ĐKTC, eStudent...",
-    "• <code>/status</code> — Kiểm tra tốc độ &amp; tình trạng 7 cổng HUB",
-    "• <code>/notify</code> — Bật / Tắt nhận thông báo tự động",
-    "• <code>/clear</code> — Xoá lịch sử trò chuyện gần đây (VD: <code>/clear 200</code>)",
-    "• <code>/author</code> — Thông tin tác giả Huynh Viet &amp; liên hệ",
-    "",
-    "💡 <b>3. Mẹo dùng cực xịn:</b>",
-    "• Nhắn thẳng từ khoá bất kỳ (VD: <code>lịch thi</code>) để tìm ngay!",
-    "• Bấm các nút số <b>📖 1–5</b> dưới mỗi danh sách để đọc chi tiết &amp; tải PDF ngay trong Telegram!",
-    "• Gõ <code>@viethubnews_bot lịch thi</code> trong bất kỳ nhóm lớp nào để chia sẻ thông báo chính thức (nếu đã bật Inline Mode trong BotFather).",
-    "",
-    `👨‍💻 Phát triển bởi <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a> · Sinh viên Khoa HTTTQL (MIS) — HUB`,
+    "<b>Lệnh nhanh</b>",
+    "<code>/online</code> · Online HUB (#1)",
+    "<code>/latest</code> · Tin mới toàn HUB",
+    "<code>/full7d</code> · <code>/full30d</code> · Theo thời gian",
+    "<code>/thi</code> · <code>/daotao</code> · <code>/scc</code> · <code>/hocphi</code> · <code>/hocbong</code>",
+    "<code>/digest</code> · <code>/status</code> · <code>/notify</code> · <code>/clear</code>",
   ].join("\n");
 
   const markup = {
     inline_keyboard: [
       [
-        { text: "🔥 Xem tin mới nhất", callback_data: "list:all:latest:1" },
-        { text: "👨‍💻 Về tác giả", callback_data: "m:author" },
+        { text: "🏛️ Online HUB", callback_data: "src:online:1" },
+        { text: "⬅️ Menu", callback_data: "m:home" },
       ],
-      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
   };
   return { text, markup };
@@ -1615,71 +1760,59 @@ function buildPaginatedListView(title, items, page, baseCbPrefix, extra = {}) {
 
   const lines = [
     `<b>${escapeHtml(title)}</b>`,
-    `Trang ${safePage}/${totalPages} · Tổng ${total} tin · ⏱ ${vnNowLabel()}`,
-    "━━━━━━━━━━━━━━━━━━━━",
+    `Trang ${safePage}/${totalPages} · ${total} tin · <code>${vnTimeOnly()}</code>`,
+    LINE,
   ];
 
   if (!slice.length) {
-    lines.push("");
-    lines.push("📭 Không có thông báo nào phù hợp trong mục này.");
+    lines.push("\nChưa có thông báo phù hợp.");
   } else {
     slice.forEach((it, idx) => {
       const num = start + idx + 1;
       const src = SOURCE_BY_KEY[it.source] || { emoji: "📌", short: it.source };
       const cat = classifyItem(it.title, it.source);
-      const urgent = isUrgentTitle(it.title);
-      const mis = isMisRelated(it.title, it.source);
-      const icon = urgent ? "🚨" : cat.icon;
-      const shortTitle = it.title.length > 105 ? it.title.slice(0, 102) + "..." : it.title;
-      const tags = [];
-      if (mis) tags.push("⭐ MIS");
-      if (it.alsoIn && it.alsoIn.length) tags.push(`+${it.alsoIn.length} cổng`);
-      const extraTag = tags.length ? ` · ${tags.join(" · ")}` : "";
+      const icon = isUrgentTitle(it.title) ? "🚨" : cat.icon;
+      const shortTitle = it.title.length > 100 ? it.title.slice(0, 97) + "..." : it.title;
+      const also = it.alsoIn && it.alsoIn.length ? ` · +${it.alsoIn.length}` : "";
 
       lines.push("");
       lines.push(`<b>${num}.</b> ${icon} <a href="${escapeHtml(it.url)}">${escapeHtml(shortTitle)}</a>`);
-      lines.push(`   └ ${src.emoji} ${escapeHtml(src.short)} · 📅 <code>${escapeHtml(it.date)}</code>${extraTag}`);
+      lines.push(`   ${escapeHtml(src.short)} · <code>${escapeHtml(it.date)}</code>${also}`);
     });
-    lines.push("");
-    lines.push("💡 Bấm nút số bên dưới để đọc nội dung &amp; tải PDF ngay trong chat!");
   }
 
   const keyboard = [];
 
-  // Hàng 1: Thanh nút đọc nhanh 1..5
   if (slice.length) {
     const numRow = slice.map((it, idx) => {
-      // Đóng gói mã quay lại nếu tổng độ dài <= 64 bytes
       let cb = `v:${it.code}:${it.id}:${currentCb}`;
       if (new TextEncoder().encode(cb).length > 64) {
         cb = `v:${it.code}:${it.id}`;
       }
-      return { text: `📖 ${start + idx + 1}`, callback_data: cb };
+      return { text: `📄 ${start + idx + 1}`, callback_data: cb };
     });
     keyboard.push(numRow);
   }
 
-  // Hàng 2: Phân trang Trước / Trang / Sau
   if (totalPages > 1) {
     const nav = [];
     if (safePage > 1) {
-      nav.push({ text: "⬅️ Trước", callback_data: `${baseCbPrefix}:${safePage - 1}` });
+      nav.push({ text: "‹ Trước", callback_data: `${baseCbPrefix}:${safePage - 1}` });
     }
-    nav.push({ text: `📄 ${safePage}/${totalPages}`, callback_data: "noop" });
+    nav.push({ text: `${safePage}/${totalPages}`, callback_data: "noop" });
     if (safePage < totalPages) {
-      nav.push({ text: "Sau ➡️", callback_data: `${baseCbPrefix}:${safePage + 1}` });
+      nav.push({ text: "Sau ›", callback_data: `${baseCbPrefix}:${safePage + 1}` });
     }
     keyboard.push(nav);
   }
 
-  // Hàng 3: Nút mở cổng gốc (nếu đang xem 1 cổng) + Làm mới + Menu
   const actionRow = [];
   if (extra.webUrl) {
-    actionRow.push({ text: "🌐 Mở trang web", url: extra.webUrl });
+    actionRow.push({ text: "🌐 Web", url: extra.webUrl });
   }
   const refreshCb = `rf:${baseCbPrefix}:${safePage}`;
   if (new TextEncoder().encode(refreshCb).length <= 64) {
-    actionRow.push({ text: "🔄 Làm mới", callback_data: refreshCb });
+    actionRow.push({ text: "🔄 Mới", callback_data: refreshCb });
   }
   actionRow.push({ text: "📌 Menu", callback_data: "m:home" });
   keyboard.push(actionRow);
@@ -1697,70 +1830,57 @@ function buildPaginatedListView(title, items, page, baseCbPrefix, extra = {}) {
 
 function buildDetailView(detail, backCb = "m:home") {
   const cat = classifyItem(detail.title, detail.source);
-  const mis = isMisRelated(detail.title, detail.source);
   const urgent = isUrgentTitle(detail.title);
   const icon = urgent ? "🚨" : cat.icon;
 
   const lines = [
     `${icon} <b>${escapeHtml(detail.title)}</b>`,
-    `<code>${cat.tag}</code>${mis ? " · ⭐ <b>KHOA HTTTQL</b>" : ""}${urgent ? " · ⚡ <b>CHÚ Ý</b>" : ""}`,
-    "━━━━━━━━━━━━━━━━━━━━",
-    `🏢 <b>Nguồn:</b> ${detail.sourceEmoji} ${escapeHtml(detail.sourceName)}`,
-    `📅 <b>Ngày đăng:</b> <code>${escapeHtml(detail.date)}</code>`,
+    `<code>${cat.tag}</code>${urgent ? " · <b>LƯU Ý</b>" : ""}`,
+    LINE,
+    `Nguồn: ${detail.sourceEmoji} ${escapeHtml(detail.sourceName)}`,
+    `Ngày: <code>${escapeHtml(detail.date)}</code>`,
   ];
 
-  if (detail.sender) {
-    lines.push(`👤 <b>Đơn vị gửi:</b> ${escapeHtml(detail.sender)}`);
-  }
-  if (detail.deadline) {
-    lines.push(`⏰ <b>Lưu ý hạn:</b> ${escapeHtml(detail.deadline)}`);
-  }
+  if (detail.sender) lines.push(`Đơn vị: ${escapeHtml(detail.sender)}`);
+  if (detail.deadline) lines.push(`Hạn: <b>${escapeHtml(detail.deadline)}</b>`);
 
   const totalAtt = detail.pdfs.length + detail.downloads.length;
-  if (totalAtt > 0) {
-    lines.push(`📎 <b>Tài liệu đính kèm:</b> ${totalAtt} tệp (bấm nút tải bên dưới)`);
-  }
+  if (totalAtt > 0) lines.push(`Đính kèm: ${totalAtt} tệp`);
 
   if (detail.bodyText && detail.bodyText.length > 20) {
     const trimmed = detail.bodyText.length > 1400 ? detail.bodyText.slice(0, 1397) + "..." : detail.bodyText;
-    lines.push("");
-    lines.push("📄 <b>Nội dung trích xuất:</b>");
-    lines.push(escapeHtml(trimmed));
+    lines.push("", escapeHtml(trimmed));
   } else if (totalAtt > 0) {
-    lines.push("");
-    lines.push("📄 Thông báo này trình bày trực tiếp dưới dạng file PDF đính kèm — bấm nút màu xanh bên dưới để mở xem ngay!");
+    lines.push("", "Nội dung đính kèm trong tệp bên dưới.");
   }
 
   const keyboard = [];
-  // Các nút tải trực tiếp từng file PDF (tối đa 5 file để gọn UI)
   detail.pdfs.slice(0, 5).forEach((pdfUrl, idx) => {
     const label = detail.pdfs.length === 1
-      ? `📥 Mở / Tải PDF: ${prettyFileName(pdfUrl, idx)}`
-      : `📥 PDF ${idx + 1}: ${prettyFileName(pdfUrl, idx)}`;
+      ? `📥 PDF · ${prettyFileName(pdfUrl, idx)}`
+      : `📥 PDF ${idx + 1} · ${prettyFileName(pdfUrl, idx)}`;
     keyboard.push([{ text: label, url: pdfUrl }]);
   });
 
-  // Các nút tải tệp đính kèm /taifiledinhkem/
   detail.downloads.slice(0, 3).forEach((dlUrl, idx) => {
-    keyboard.push([{ text: `📦 Tải tệp đính kèm #${idx + 1}`, url: dlUrl }]);
+    keyboard.push([{ text: `📦 Tải tệp #${idx + 1}`, url: dlUrl }]);
   });
 
-  // Các link chi tiết đính kèm trong bài (VD: "Tại đây" -> scc.hub.edu.vn, Google Drive...)
   (detail.extraLinks || []).slice(0, 3).forEach((lk, idx) => {
-    const lbl = lk.label && !/^tại đây$/i.test(lk.label) ? lk.label : `Xem chi tiết #${idx + 1}`;
-    keyboard.push([{ text: `🔗 Mở liên kết: ${lbl}`, url: lk.url }]);
+    const lbl = lk.label && !/^tại đây$/i.test(lk.label) ? lk.label : `Liên kết #${idx + 1}`;
+    keyboard.push([{ text: `🔗 ${lbl}`, url: lk.url }]);
   });
 
   keyboard.push([
-    { text: "🌐 Mở bài gốc trên web", url: detail.webUrl },
-    { text: `${detail.sourceEmoji} Xem cổng này`, callback_data: `src:${detail.source}:1` },
+    { text: "🌐 Bài gốc", url: detail.webUrl },
+    { text: `${detail.sourceEmoji} Xem cổng`, callback_data: `src:${detail.source}:1` },
   ]);
 
   const backRow = [];
   if (backCb && backCb !== "m:home") {
-    backRow.push({ text: "⬅️ Quay lại danh sách", callback_data: backCb });
+    backRow.push({ text: "⬅️ Quay lại", callback_data: backCb });
   }
-  backRow.push({ text: "📌 Menu chính", callback_data: "m:home" });
+  backRow.push({ text: "📌 Menu", callback_data: "m:home" });
   keyboard.push(backRow);
 
   return { text: lines.join("\n"), markup: { inline_keyboard: keyboard } };
@@ -1768,7 +1888,6 @@ function buildDetailView(detail, backCb = "m:home") {
 
 function buildDigestView(allItems, days) {
   const buckets = {
-    mis: [],
     exam: [],
     tuition: [],
     scholar: [],
@@ -1779,38 +1898,35 @@ function buildDigestView(allItems, days) {
   };
 
   for (const it of allItems) {
-    if (isMisRelated(it.title, it.source)) buckets.mis.push(it);
     const cat = classifyItem(it.title, it.source);
     (buckets[cat.key] || buckets.general).push(it);
   }
 
   const lines = [
-    `📰 <b>BẢN TIN TỔNG HỢP ${days} NGÀY — HUB MONITOR PRO</b>`,
-    `Cập nhật: ${vnNowLabel()} · Tổng ${allItems.length} thông báo (đã gộp trùng)`,
-    "━━━━━━━━━━━━━━━━━━━━",
+    `<b>Tổng hợp ${days} ngày</b>`,
+    `<code>${vnNowLabel()}</code> · ${allItems.length} thông báo`,
+    LINE,
   ];
 
   if (!allItems.length) {
-    lines.push("\n📭 Không có thông báo mới nào trong khoảng thời gian này.");
+    lines.push("\nChưa có thông báo mới.");
   } else {
     const sections = [
-      { key: "mis",     head: "💻 <b>Khoa HTTTQL (MIS) &amp; Liên quan</b>" },
       { key: "exam",    head: "📝 <b>Lịch thi &amp; Khảo thí</b>" },
       { key: "tuition", head: "💰 <b>Học phí &amp; Tài chính</b>" },
-      { key: "scholar", head: "🏆 <b>Học bổng &amp; Giải thưởng</b>" },
+      { key: "scholar", head: "🏆 <b>Học bổng</b>" },
       { key: "grad",    head: "🎓 <b>Tốt nghiệp &amp; Thực tập</b>" },
       { key: "reg",     head: "📋 <b>Đào tạo &amp; Học phần</b>" },
-      { key: "student", head: "🤝 <b>Sinh viên &amp; Sự kiện</b>" },
+      { key: "student", head: "🤝 <b>Sinh viên</b>" },
     ];
 
     for (const sec of sections) {
       const list = buckets[sec.key];
       if (!list.length) continue;
-      lines.push("");
-      lines.push(`${sec.head} (${list.length} tin)`);
+      lines.push("", `${sec.head} (${list.length})`);
       list.slice(0, 3).forEach((it) => {
-        const shortT = it.title.length > 78 ? it.title.slice(0, 75) + "..." : it.title;
-        lines.push(`• <code>${it.date}</code> <a href="${escapeHtml(it.url)}">${escapeHtml(shortT)}</a>`);
+        const shortT = it.title.length > 76 ? it.title.slice(0, 73) + "..." : it.title;
+        lines.push(`• <code>${it.date.slice(0, 5)}</code> <a href="${escapeHtml(it.url)}">${escapeHtml(shortT)}</a>`);
       });
     }
   }
@@ -1818,14 +1934,13 @@ function buildDigestView(allItems, days) {
   const markup = {
     inline_keyboard: [
       [
-        { text: days === 7 ? "✅ Bản tin 7 ngày" : "📅 Bản tin 7 ngày", callback_data: "digest:7" },
-        { text: days === 30 ? "✅ Bản tin 30 ngày" : "🗓️ Bản tin 30 ngày", callback_data: "digest:30" },
+        { text: days === 7 ? "● 7 ngày" : "7 ngày", callback_data: "digest:7" },
+        { text: days === 30 ? "● 30 ngày" : "30 ngày", callback_data: "digest:30" },
       ],
       [
-        { text: "🔥 Xem danh sách đầy đủ", callback_data: `list:all:${days}:1` },
-        { text: "💻 Không gian MIS", callback_data: "m:mis" },
+        { text: "📋 Xem tất cả", callback_data: `list:all:${days}:1` },
+        { text: "⬅️ Menu", callback_data: "m:home" },
       ],
-      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
     ],
   };
   return { text: lines.join("\n"), markup };
@@ -1835,45 +1950,41 @@ function buildStatusView(data) {
   const okCount = data.health.filter((h) => h.ok).length;
   const totalItems = data.health.reduce((s, h) => s + h.count, 0);
   const lines = [
-    "📊 <b>TRẠNG THÁI HỆ SINH THÁI HUB (REAL-TIME)</b>",
-    `Kiểm tra lúc: ${data.fetchedAt}`,
-    "━━━━━━━━━━━━━━━━━━━━",
-    `🟢 <b>Hoạt động:</b> ${okCount}/${data.health.length} cổng · <b>${totalItems}</b> tin đã lập chỉ mục`,
-    "",
+    "<b>Trạng thái hệ thống</b>",
+    `<code>${data.fetchedAt}</code> · ${okCount}/${data.health.length} cổng · ${totalItems} tin`,
+    LINE,
   ];
 
   for (const h of data.health) {
     const src = SOURCE_BY_KEY[h.key];
-    const dot = h.ok ? "🟢" : "🔴";
+    if (!src) continue;
+    const dot = h.ok ? (h.fallback ? "🟡" : "🟢") : "🔴";
     const info = h.ok
-      ? `${h.count} tin · mới nhất <code>${h.latestDate}</code> · ${h.ms}ms`
-      : `Lỗi: ${escapeHtml(h.error.slice(0, 40))}`;
-    lines.push(`${dot} ${src.emoji} <b>${escapeHtml(src.short)}</b>`);
-    lines.push(`   └ ${info}`);
+      ? (h.fallback ? `${h.count} tin · đệm nhanh` : `${h.count} tin · <code>${h.latestDate}</code> · ${h.ms}ms`)
+      : escapeHtml(h.error.slice(0, 32));
+    lines.push(`${dot} <b>${escapeHtml(src.short)}</b> · ${info}`);
   }
 
   const markup = {
     inline_keyboard: [
       [
-        { text: "🔄 Kiểm tra lại ngay", callback_data: "rf:status" },
-        { text: "🔥 Tin mới nhất", callback_data: "list:all:latest:1" },
+        { text: "🔄 Kiểm tra lại", callback_data: "rf:status" },
+        { text: "🏛️ Online HUB", callback_data: "src:online:1" },
       ],
-      [{ text: "⬅️ Quay lại Menu chính", callback_data: "m:home" }],
+      [{ text: "⬅️ Menu", callback_data: "m:home" }],
     ],
   };
   return { text: lines.join("\n"), markup };
 }
 
-// ---------------------------------------------------------------- Action Router (Shared by Commands & Callbacks)
+// ---------------------------------------------------------------- Action Router
 
-async function renderRoute(routeStr, bypassCache = false, env = null) {
-  // Handle explicit refresh prefix "rf:..."
+async function renderRoute(routeStr, bypassCache = false, env = null, ctx = null) {
   if (routeStr.startsWith("rf:")) {
-    return await renderRoute(routeStr.slice(3), true, env);
+    return await renderRoute(routeStr.slice(3), true, env, ctx);
   }
 
   if (routeStr === "m:home") return mainMenuView();
-  if (routeStr === "m:mis") return misHubView();
   if (routeStr === "m:portals") return portalsMenuView();
   if (routeStr === "m:topics") return topicsMenuView();
   if (routeStr === "m:search") return searchMenuView();
@@ -1882,30 +1993,30 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
   if (routeStr === "m:help") return helpView();
 
   if (routeStr === "status") {
-    const data = await fetchAllSources(1, bypassCache, env);
+    const data = await fetchAllSources(1, true, env, ctx);
     return buildStatusView(data);
   }
 
   if (routeStr.startsWith("digest:")) {
     const days = parseInt(routeStr.split(":")[1], 10) || 7;
-    const data = await fetchAllSources(days >= 30 ? 3 : 1, bypassCache, env);
+    const data = await fetchAllSources(days >= 30 ? 3 : 1, bypassCache, env, ctx);
     const merged = mergeAndDedupe(data.bySource, days);
     return buildDigestView(merged, days);
   }
 
   if (routeStr.startsWith("list:all:")) {
     const parts = routeStr.split(":");
-    const mode = parts[2]; // latest | 7 | 30
+    const mode = parts[2];
     const page = parseInt(parts[3], 10) || 1;
     const onlinePages = mode === "30" ? 3 : 1;
-    const data = await fetchAllSources(onlinePages, bypassCache, env);
+    const data = await fetchAllSources(onlinePages, bypassCache, env, ctx);
     const days = mode === "latest" ? null : parseInt(mode, 10);
     let items = mergeAndDedupe(data.bySource, days);
     if (mode === "latest") items = items.slice(0, 30);
     const header =
       mode === "latest"
-        ? "🔥 THÔNG BÁO MỚI NHẤT — TOÀN HUB"
-        : `📅 THÔNG BÁO ${days} NGÀY GẦN NHẤT — TOÀN HUB`;
+        ? "🔥 Tin mới nhất · HUB"
+        : `📅 Thông báo ${days} ngày`;
     return buildPaginatedListView(header, items, page, `list:all:${mode}`);
   }
 
@@ -1916,41 +2027,21 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
     const src = SOURCE_BY_KEY[skey];
     if (!src) return mainMenuView();
 
-    if (skey === "fb_htttql" && !(env && (env.FB_HTTTQL_RSS_URL || env.FB_ACCESS_TOKEN))) {
-      return {
-        text: [
-          "📘 <b>FANPAGE KHOA HỆ THỐNG THÔNG TIN QUẢN LÝ (MIS — HUB)</b>",
-          "━━━━━━━━━━━━━━━━━━━━",
-          "👇 Bấm nút bên dưới để xem bài viết mới nhất trực tiếp trên Fanpage Khoa:",
-        ].join("\n"),
-        markup: {
-          inline_keyboard: [
-            [{ text: "📘 Mở Fanpage Khoa HTTTQL", url: FB_HTTTQL_URL }],
-            [
-              { text: "📢 Thông báo Web Khoa", callback_data: "src:htttql:1" },
-              { text: "⬅️ Không gian MIS", callback_data: "m:mis" },
-            ],
-            [{ text: "📌 Quay lại Menu chính", callback_data: "m:home" }],
-          ],
-        },
-      };
-    }
-
-    const items = await fetchSingleSourceCached(skey, skey === "online" ? 3 : 1, bypassCache, env);
+    // Tối ưu tốc độ Online HUB: trang 1–2 chỉ tải 1 trang (10 tin, nhanh gấp 3–5 lần), trang 3+ mới mở rộng
+    const onlinePagesNeeded = skey === "online" ? (page <= 2 ? 1 : 3) : 1;
+    const items = await fetchSingleSourceCached(skey, onlinePagesNeeded, bypassCache, env, ctx);
     const siblingMap = {
-      daotao: { cb: "src:daotao_news:1", label: "📰 Xem Tin tức & Thực tập — Đào tạo" },
-      daotao_news: { cb: "src:daotao:1", label: "🎓 Xem Thông báo — Phòng Đào tạo" },
-      htttql: { cb: "src:htttql_ev:1", label: "🚀 Xem Sự kiện & Tọa đàm MIS" },
-      htttql_ev: { cb: "src:htttql:1", label: "📢 Xem Thông báo Web Khoa HTTTQL" },
-      fb_htttql: { cb: "src:htttql:1", label: "📢 Xem Thông báo Web Khoa HTTTQL" },
+      online: { cb: "src:online:3", label: "📚 Tải thêm tin cũ hơn (30 tin)" },
+      daotao: { cb: "src:daotao_news:1", label: "📰 Đào tạo · Tin & Thực tập" },
+      daotao_news: { cb: "src:daotao:1", label: "🎓 Phòng Đào tạo · Thông báo" },
     };
-    const sibling = siblingMap[skey];
-    return buildPaginatedListView(`${src.emoji} ${src.name.toUpperCase()}`, items, page, `src:${skey}`, {
+    const sibling = (skey === "online" && page >= 3) ? null : siblingMap[skey];
+    return buildPaginatedListView(`${src.emoji} ${src.name}`, items, page, `src:${skey}`, {
       webUrl: src.url,
       siblingCb: sibling ? sibling.cb : "",
       siblingLabel: sibling ? sibling.label : "",
-      backCb: skey.startsWith("htttql") || skey === "fb_htttql" ? "m:mis" : "m:portals",
-      backLabel: skey.startsWith("htttql") || skey === "fb_htttql" ? "⬅️ Không gian Khoa HTTTQL" : "⬅️ Chọn cổng HUB khác",
+      backCb: "m:portals",
+      backLabel: "⬅️ Chọn cổng khác",
     });
   }
 
@@ -1959,26 +2050,14 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
     const tpKey = parts[1];
     const page = parseInt(parts[2], 10) || 1;
     const tp = TOPICS[tpKey] || TOPICS.general;
-    const data = await fetchAllSources(2, bypassCache, env);
+    const data = await fetchAllSources(1, bypassCache, env, ctx);
     const all = mergeAndDedupe(data.bySource, null);
     const filtered = tpKey === "urgent"
       ? all.filter((it) => isUrgentTitle(it.title))
       : all.filter((it) => classifyItem(it.title, it.source).key === tpKey);
-    return buildPaginatedListView(`${tp.icon} CHỦ ĐỀ: ${tp.label.toUpperCase()}`, filtered.slice(0, 40), page, `tp:${tpKey}`, {
+    return buildPaginatedListView(`${tp.icon} ${tp.label}`, filtered.slice(0, 40), page, `tp:${tpKey}`, {
       backCb: "m:topics",
-      backLabel: "⬅️ Chọn chủ đề khác",
-    });
-  }
-
-  if (routeStr.startsWith("mis:radar:")) {
-    const page = parseInt(routeStr.split(":")[2], 10) || 1;
-    const data = await fetchAllSources(2, bypassCache, env);
-    const all = mergeAndDedupe(data.bySource, null);
-    const misItems = all.filter((it) => isMisRelated(it.title, it.source));
-    return buildPaginatedListView("🌟 RADAR TIN KHOA HTTTQL (MIS) TOÀN HUB", misItems.slice(0, 40), page, "mis:radar", {
-      webUrl: "https://khoahtttql.hub.edu.vn/thong-bao",
-      backCb: "m:mis",
-      backLabel: "⬅️ Không gian Khoa HTTTQL",
+      backLabel: "⬅️ Chủ đề khác",
     });
   }
 
@@ -1986,11 +2065,11 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
     const lastColon = routeStr.lastIndexOf(":");
     const kw = routeStr.slice(2, lastColon);
     const page = parseInt(routeStr.slice(lastColon + 1), 10) || 1;
-    const data = await fetchAllSources(3, bypassCache, env);
+    const data = await fetchAllSources(2, bypassCache, env, ctx);
     const all = mergeAndDedupe(data.bySource, null);
     const kwNorm = stripAccents(kw).toLowerCase().trim();
     const found = all.filter((it) => stripAccents(it.title).toLowerCase().includes(kwNorm));
-    return buildPaginatedListView(`🔎 TÌM "${kw}" TRÊN TOÀN HUB`, found.slice(0, 40), page, `q:${kw}`, {
+    return buildPaginatedListView(`🔎 "${kw}"`, found.slice(0, 40), page, `q:${kw}`, {
       backCb: "m:search",
       backLabel: "⬅️ Tìm từ khoá khác",
     });
@@ -2001,7 +2080,7 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
     const code = parts[1];
     const id = parts[2];
     const backCb = parts.length > 3 ? parts.slice(3).join(":") : "m:home";
-    const detail = await fetchArticleDetail(code, id, env);
+    const detail = await fetchArticleDetail(code, id, bypassCache);
     return buildDetailView(detail, backCb);
   }
 
@@ -2010,7 +2089,7 @@ async function renderRoute(routeStr, bypassCache = false, env = null) {
 
 // ---------------------------------------------------------------- Update Processors
 
-async function handleMessage(msg, env) {
+async function handleMessage(msg, env, ctx = null) {
   const chatId = msg.chat && msg.chat.id;
   const fromId = (msg.from && msg.from.id) || chatId;
   const text = (msg.text || msg.caption || "").trim();
@@ -2022,12 +2101,11 @@ async function handleMessage(msg, env) {
   const cmd = isCommand ? text.split(/\s+/)[0].split("@")[0].toLowerCase() : "";
   const arg = isCommand ? text.slice(text.split(/\s+/)[0].length).trim() : text;
 
-  // Tự động lưu người dùng vào Cloudflare KV để nhận thông báo tự động & Broadcast
   await trackSubscriber(env, msg.chat, msg.from, cmd === "/start");
 
-  // 1) Kiểm tra nếu Admin đang trả lời ô ForceReply soạn thông báo Broadcast
+  // 1) Admin ForceReply broadcast draft
   const replyText = (msg.reply_to_message && msg.reply_to_message.text) || "";
-  const isReplyBroadcast = replyText.includes("SOẠN THÔNG BÁO PHÁT SÓNG");
+  const isReplyBroadcast = replyText.includes("Soạn thông báo phát sóng");
   if (isReplyBroadcast && (await isAdminUser(env, fromId))) {
     const urgent = replyText.includes("KHẨN");
     const draft = { text, photoFileId, urgent, createdAt: Date.now() };
@@ -2039,45 +2117,38 @@ async function handleMessage(msg, env) {
     const preview = formatBroadcastPayload(text, urgent);
     const confirmKb = {
       inline_keyboard: [
-        [{ text: `✅ XÁC NHẬN GỬI NGAY (${activeCount} người)`, callback_data: "adm:bc_send" }],
+        [{ text: `✅ Gửi ngay (${activeCount} người)`, callback_data: "adm:bc_send" }],
         [
-          { text: "🧪 Gửi thử cho mình", callback_data: "adm:bc_preview" },
-          { text: "❌ Huỷ bỏ", callback_data: "adm:bc_cancel" },
+          { text: "🧪 Thử riêng", callback_data: "adm:bc_preview" },
+          { text: "❌ Huỷ", callback_data: "adm:bc_cancel" },
         ],
       ],
     };
-    const headerNote = `👀 <b>XEM TRƯỚC THÔNG BÁO TRƯỚC KHI GỬI (${activeCount} người nhận):</b>\n\n`;
     if (photoFileId) {
       await sendPhotoMsg(env, chatId, photoFileId, preview, confirmKb);
     } else {
-      await sendMsg(env, chatId, headerNote + preview, confirmKb);
+      await sendMsg(env, chatId, `<b>Xem trước (${activeCount} người nhận)</b>\n\n` + preview, confirmKb);
     }
     return;
   }
 
-  // Bỏ qua tin nhắn thường trong group chat (trừ khi reply prompt tìm kiếm của bot)
   const isReplyToSearch = Boolean(replyText && replyText.includes("Nhập từ khoá"));
   if (!isCommand && !isPrivate && !isReplyToSearch) return;
 
-  // 2) Khu vực QUẢN TRỊ VIÊN (/admin, /broadcast, /bc, /tb, /bc!, /testpush)
+  // 2) Admin commands
   if (cmd === "/admin") {
     if (arg && !(await isAdminUser(env, fromId))) {
       const claim = await claimAdminWithPin(env, fromId, arg);
       if (claim.ok) {
         const v = await adminHomeView(env, fromId);
-        await sendMsg(
-          env,
-          chatId,
-          "✅ <b>Xác thực Quản trị viên thành công!</b> Tài khoản của bạn đã được khoá làm Admin vĩnh viễn.\n\n" + v.text,
-          v.markup
-        );
+        await sendMsg(env, chatId, "✅ <b>Đã xác thực Admin.</b>\n\n" + v.text, v.markup);
         return;
       }
-      await sendMsg(env, chatId, "⛔ Mã xác thực không đúng hoặc Admin đã được thiết lập trước đó.");
+      await sendMsg(env, chatId, "⛔ Mã xác thực không hợp lệ.");
       return;
     }
     if (!(await isAdminUser(env, fromId))) {
-      await sendMsg(env, chatId, "⛔ Bạn không có quyền truy cập khu vực Quản trị viên.");
+      await sendMsg(env, chatId, "⛔ Không có quyền truy cập.");
       return;
     }
     const v = await adminHomeView(env, fromId);
@@ -2087,36 +2158,33 @@ async function handleMessage(msg, env) {
 
   if (cmd === "/broadcast" || cmd === "/bc" || cmd === "/tb" || cmd === "/bc!") {
     if (!(await isAdminUser(env, fromId))) {
-      await sendMsg(env, chatId, "⛔ Chỉ Quản trị viên mới có quyền gửi thông báo hàng loạt.");
+      await sendMsg(env, chatId, "⛔ Chỉ Admin có quyền phát thông báo.");
       return;
     }
     if (!arg && !photoFileId) {
       await sendMsg(
         env,
         chatId,
-        "📢 <b>Cách gửi thông báo cho tất cả người dùng:</b>\n" +
-        "• <code>/bc Nội dung thông báo...</code> (xem trước rồi xác nhận)\n" +
-        "• <code>/bc! Nội dung thông báo...</code> (gửi thẳng ngay lập tức!)\n" +
-        "• Hoặc gửi <b>ảnh kèm chú thích</b> <code>/bc Nội dung...</code>\n" +
-        "• Hoặc mở <code>/admin</code> để dùng giao diện nút bấm!"
+        "<b>Phát thông báo</b>\n" + LINE + "\n" +
+        "• <code>/bc nội dung</code> — Xem trước rồi gửi\n" +
+        "• <code>/bc! nội dung</code> — Gửi trực tiếp ngay\n" +
+        "• Gửi ảnh kèm chú thích <code>/bc ...</code>"
       );
       return;
     }
     const draft = { text: arg, photoFileId, urgent: false, createdAt: Date.now() };
     if (cmd === "/bc!") {
-      const waitMsg = await sendMsg(env, chatId, "⏳ Đang phát sóng thông báo tới tất cả người dùng...");
+      const waitMsg = await sendMsg(env, chatId, "⏳ Đang gửi thông báo...");
       const stat = await executeBroadcast(env, draft);
       const report = [
-        "✅ <b>PHÁT SÓNG TRỰC TIẾP HOÀN TẤT!</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        `📤 Đã gửi thành công: <b>${stat.sent}/${stat.total}</b> người`,
-        `🚫 Đã chặn bot (tự gỡ): <b>${stat.blocked}</b> người`,
-        `❌ Lỗi khác: <b>${stat.failed}</b> người`,
-        `⏱ Hoàn tất lúc: <code>${vnNowLabel()}</code>`,
+        "✅ <b>Đã phát sóng</b>",
+        LINE,
+        `Thành công: <b>${stat.sent}/${stat.total}</b> · Chặn: ${stat.blocked} · Lỗi: ${stat.failed}`,
+        `<code>${vnNowLabel()}</code>`,
       ].join("\n");
       const mid = waitMsg && waitMsg.result && waitMsg.result.message_id;
       if (mid) {
-        await editMsg(env, chatId, mid, report, { inline_keyboard: [[{ text: "🛡️ Mở bảng Admin", callback_data: "adm:home" }]] });
+        await editMsg(env, chatId, mid, report, { inline_keyboard: [[{ text: "⬅️ Admin", callback_data: "adm:home" }]] });
       } else {
         await sendMsg(env, chatId, report);
       }
@@ -2131,39 +2199,37 @@ async function handleMessage(msg, env) {
     const preview = formatBroadcastPayload(arg, false);
     const confirmKb = {
       inline_keyboard: [
-        [{ text: `✅ XÁC NHẬN GỬI NGAY (${activeCount} người)`, callback_data: "adm:bc_send" }],
+        [{ text: `✅ Gửi ngay (${activeCount} người)`, callback_data: "adm:bc_send" }],
         [
-          { text: "🧪 Gửi thử cho mình", callback_data: "adm:bc_preview" },
-          { text: "❌ Huỷ bỏ", callback_data: "adm:bc_cancel" },
+          { text: "🧪 Thử riêng", callback_data: "adm:bc_preview" },
+          { text: "❌ Huỷ", callback_data: "adm:bc_cancel" },
         ],
       ],
     };
     if (photoFileId) {
       await sendPhotoMsg(env, chatId, photoFileId, preview, confirmKb);
     } else {
-      await sendMsg(env, chatId, `👀 <b>XEM TRƯỚC (${activeCount} người sẽ nhận):</b>\n\n` + preview, confirmKb);
+      await sendMsg(env, chatId, `<b>Xem trước (${activeCount} người nhận)</b>\n\n` + preview, confirmKb);
     }
     return;
   }
 
   if (cmd === "/testpush") {
     if (!(await isAdminUser(env, fromId))) {
-      await sendMsg(env, chatId, "⛔ Lệnh này chỉ dành cho Quản trị viên.");
+      await sendMsg(env, chatId, "⛔ Chỉ dành cho Admin.");
       return;
     }
-    const preview = formatBroadcastPayload("Đây là thông báo kiểm tra tức thì từ bảng Quản trị viên HUB Monitor Pro! 🔔", false);
-    await sendMsg(env, chatId, preview, { inline_keyboard: [[{ text: "🛡️ Về bảng Admin", callback_data: "adm:home" }]] });
+    const preview = formatBroadcastPayload("Kiểm tra thông báo tức thì từ HUB Monitor.", false);
+    await sendMsg(env, chatId, preview, { inline_keyboard: [[{ text: "⬅️ Admin", callback_data: "adm:home" }]] });
     return;
   }
 
-  // 3) Cài đặt nhận thông báo cho người dùng (/notify)
+  // 3) User settings & static views
   if (cmd === "/notify") {
     const v = await userNotifyView(env, chatId);
     await sendMsg(env, chatId, v.text, v.markup);
     return;
   }
-
-  // Các màn hình tĩnh trả lời tức thì <50ms
   if (cmd === "/start" || cmd === "/menu") {
     const v = mainMenuView();
     await sendMsg(env, chatId, v.text, v.markup);
@@ -2171,11 +2237,6 @@ async function handleMessage(msg, env) {
   }
   if (cmd === "/help") {
     const v = helpView();
-    await sendMsg(env, chatId, v.text, v.markup);
-    return;
-  }
-  if (cmd === "/htttql" || cmd === "/mis" || cmd === "/khoa") {
-    const v = misHubView();
     await sendMsg(env, chatId, v.text, v.markup);
     return;
   }
@@ -2195,51 +2256,54 @@ async function handleMessage(msg, env) {
     await sendMsg(
       env,
       chatId,
-      "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>\n(Lưu ý: Telegram chỉ cho phép bot xoá tin nhắn trong vòng 48 giờ)",
+      "🧹 <b>Đã dọn lịch sử gần đây.</b>\n(Telegram giới hạn xoá tin trong 48 giờ)",
       {
         inline_keyboard: [[
-          { text: "📌 Mở Menu", callback_data: "m:home" },
-          { text: "🗑️ Ẩn tin này", callback_data: "del:self" },
+          { text: "📌 Menu", callback_data: "m:home" },
+          { text: "🗑️ Ẩn", callback_data: "del:self" },
         ]],
       }
     );
     return;
   }
 
-  // Xác định route cần tải dữ liệu live
+  // 4) Live routes
   let route = null;
-  let loadingText = "⏳ Đang quét dữ liệu từ hệ sinh thái HUB...";
+  let loadingText = "⏳ Đang tải...";
 
-  if (cmd === "/latest" || cmd === "/update") {
+  if (cmd === "/online") {
+    route = "src:online:1";
+    loadingText = "🏛️ Đang tải Online HUB...";
+  } else if (cmd === "/latest" || cmd === "/update") {
     route = "rf:list:all:latest:1";
-    loadingText = "⚡ Đang lấy thông báo mới nhất từ tất cả 7 cổng HUB...";
+    loadingText = "⚡ Đang tải tin mới nhất...";
   } else if (cmd === "/full7d") {
     route = "list:all:7:1";
-    loadingText = "📅 Đang tổng hợp thông báo 7 ngày gần nhất...";
+    loadingText = "📅 Đang tải tin 7 ngày...";
   } else if (cmd === "/full30d") {
     route = "list:all:30:1";
-    loadingText = "🗓️ Đang tổng hợp thông báo 30 ngày gần nhất...";
+    loadingText = "🗓️ Đang tải tin 30 ngày...";
   } else if (cmd === "/thi") {
     route = "tp:exam:1";
-    loadingText = "📝 Đang tải lịch thi & thông báo khảo thí...";
+    loadingText = "📝 Đang tải Lịch thi...";
   } else if (cmd === "/daotao") {
     route = "src:daotao:1";
-    loadingText = "🎓 Đang tải thông báo Phòng Đào tạo...";
+    loadingText = "🎓 Đang tải Phòng Đào tạo...";
   } else if (cmd === "/scc") {
     route = "src:scc:1";
-    loadingText = "🤝 Đang tải thông báo Trung tâm SV (SCC)...";
+    loadingText = "🤝 Đang tải Trung tâm SV...";
   } else if (cmd === "/hocphi") {
     route = "tp:tuition:1";
-    loadingText = "💰 Đang lọc thông báo Học phí & Tài chính...";
+    loadingText = "💰 Đang tải Học phí...";
   } else if (cmd === "/hocbong") {
     route = "tp:scholar:1";
-    loadingText = "🏆 Đang săn tin Học bổng trên toàn HUB...";
+    loadingText = "🏆 Đang tải Học bổng...";
   } else if (cmd === "/digest") {
     route = "digest:7";
-    loadingText = "📰 Đang biên tập bản tin tổng hợp tuần...";
+    loadingText = "📰 Đang tổng hợp...";
   } else if (cmd === "/status") {
     route = "rf:status";
-    loadingText = "📊 Đang ping kiểm tra 7 cổng thông tin HUB...";
+    loadingText = "📊 Đang kiểm tra 7 cổng HUB...";
   } else if (cmd === "/find" || !isCommand) {
     const kw = arg.trim();
     if (!kw) {
@@ -2249,24 +2313,18 @@ async function handleMessage(msg, env) {
     }
     const safeKw = truncateUtf8(kw.replace(/:/g, " "), 36).trim();
     route = `q:${safeKw}:1`;
-    loadingText = `🔎 Đang tìm "<b>${escapeHtml(safeKw)}</b>" trên toàn bộ 7 cổng HUB...`;
+    loadingText = `🔎 Đang tìm "<b>${escapeHtml(safeKw)}</b>"...`;
   } else {
     const v = mainMenuView();
-    await sendMsg(
-      env,
-      chatId,
-      "🤔 Không nhận ra lệnh này. Mở nhanh bảng điều khiển cho bạn nhé:\n\n" + v.text,
-      v.markup
-    );
+    await sendMsg(env, chatId, v.text, v.markup);
     return;
   }
 
-  // Gửi tin nhắn loading rồi edit tại chỗ để chat siêu sạch đẹp!
   const sent = await sendMsg(env, chatId, loadingText);
   const msgId = sent && sent.result && sent.result.message_id;
 
   try {
-    const view = await renderRoute(route, false, env);
+    const view = await renderRoute(route, false, env, ctx);
     if (msgId) {
       await editMsg(env, chatId, msgId, view.text, view.markup);
     } else {
@@ -2274,8 +2332,8 @@ async function handleMessage(msg, env) {
     }
   } catch (e) {
     log("handleMessage route error", route, e);
-    const errText = `❌ Có lỗi khi truy cập hệ thống HUB: <code>${escapeHtml(e.message || e)}</code>\nVui lòng thử lại sau giây lát.`;
-    const fallbackKb = { inline_keyboard: [[{ text: "📌 Mở Menu chính", callback_data: "m:home" }]] };
+    const errText = `⚠️ Không thể kết nối HUB: <code>${escapeHtml(e.message || e)}</code>`;
+    const fallbackKb = { inline_keyboard: [[{ text: "📌 Menu", callback_data: "m:home" }]] };
     if (msgId) {
       await editMsg(env, chatId, msgId, errText, fallbackKb);
     } else {
@@ -2284,7 +2342,7 @@ async function handleMessage(msg, env) {
   }
 }
 
-async function handleCallback(cb, env) {
+async function handleCallback(cb, env, ctx = null) {
   const data = cb.data || "";
   const msg = cb.message;
   const chatId = msg && msg.chat && msg.chat.id;
@@ -2296,15 +2354,14 @@ async function handleCallback(cb, env) {
   }
 
   if (data === "noop") {
-    await answerCb(env, cb.id, "Dùng nút Trước / Sau để chuyển trang");
+    await answerCb(env, cb.id);
     return;
   }
 
-  // User toggle auto-notifications
   if (data === "user:notify_on" || data === "user:notify_off") {
     const enable = data === "user:notify_on";
     await setUserSubscription(env, chatId, enable, false);
-    await answerCb(env, cb.id, enable ? "🔔 Đã bật nhận thông báo!" : "🔕 Đã tắt nhận thông báo!");
+    await answerCb(env, cb.id, enable ? "Đã bật thông báo" : "Đã tắt thông báo");
     if (chatId && messageId) {
       const v = await userNotifyView(env, chatId);
       await editMsg(env, chatId, messageId, v.text, v.markup);
@@ -2312,46 +2369,44 @@ async function handleCallback(cb, env) {
     return;
   }
 
-  // Admin Panel Callbacks (strictly protected!)
+  // Admin callbacks
   if (data.startsWith("adm:")) {
     if (!(await isAdminUser(env, fromId))) {
-      await answerCb(env, cb.id, "⛔ Chỉ Quản trị viên mới dùng được nút này!", true);
+      await answerCb(env, cb.id, "⛔ Chỉ dành cho Admin", true);
       return;
     }
     if (data === "adm:home") {
-      await answerCb(env, cb.id, "🛡️ Đang tải bảng Admin...");
+      await answerCb(env, cb.id);
       const v = await adminHomeView(env, fromId);
       await editMsg(env, chatId, messageId, v.text, v.markup);
       return;
     }
     if (data.startsWith("adm:users:")) {
       const page = parseInt(data.split(":")[2], 10) || 1;
-      await answerCb(env, cb.id, "👥 Đang tải danh sách...");
+      await answerCb(env, cb.id);
       const v = await adminUsersView(env, page);
       await editMsg(env, chatId, messageId, v.text, v.markup);
       return;
     }
     if (data === "adm:bc_ask" || data === "adm:bc_urgent_ask") {
       const isUrgent = data === "adm:bc_urgent_ask";
-      await answerCb(env, cb.id, "Nhập nội dung thông báo...");
+      await answerCb(env, cb.id);
       await sendMsg(
         env,
         chatId,
-        (isUrgent
-          ? "🚨 <b>SOẠN THÔNG BÁO PHÁT SÓNG KHẨN</b>\n"
-          : "📢 <b>SOẠN THÔNG BÁO PHÁT SÓNG CHO TẤT CẢ NGƯỜI DÙNG</b>\n") +
-        "Hãy trả lời tin nhắn này bằng văn bản (hoặc gửi ảnh kèm chú thích). Bot sẽ cho bạn xem trước trước khi phát sóng!",
-        { force_reply: true, input_field_placeholder: "Nhập nội dung thông báo gửi tới mọi người..." }
+        (isUrgent ? "🚨 <b>Soạn thông báo phát sóng KHẨN</b>\n" : "📢 <b>Soạn thông báo phát sóng</b>\n") +
+        "Trả lời tin này bằng văn bản hoặc ảnh kèm chú thích.",
+        { force_reply: true, input_field_placeholder: "Nhập nội dung thông báo..." }
       );
       return;
     }
     if (data === "adm:bc_preview") {
       const draft = env.SUBSCRIBERS_KV ? await env.SUBSCRIBERS_KV.get(`draft:${fromId}`, { type: "json" }) : null;
       if (!draft) {
-        await answerCb(env, cb.id, "Bản nháp đã hết hạn (15 phút), vui lòng soạn lại.", true);
+        await answerCb(env, cb.id, "Bản nháp đã hết hạn.", true);
         return;
       }
-      await answerCb(env, cb.id, "🧪 Đang gửi thử cho bạn...");
+      await answerCb(env, cb.id, "Đang gửi thử...");
       const formatted = formatBroadcastPayload(draft.text || "", Boolean(draft.urgent));
       if (draft.photoFileId) {
         await sendPhotoMsg(env, chatId, draft.photoFileId, formatted);
@@ -2362,7 +2417,7 @@ async function handleCallback(cb, env) {
     }
     if (data === "adm:bc_cancel") {
       if (env.SUBSCRIBERS_KV) await env.SUBSCRIBERS_KV.delete(`draft:${fromId}`);
-      await answerCb(env, cb.id, "❌ Đã huỷ bản nháp.");
+      await answerCb(env, cb.id, "Đã huỷ");
       const v = await adminHomeView(env, fromId);
       if (msg && msg.photo) {
         await tgApi(env, "deleteMessage", { chat_id: chatId, message_id: messageId });
@@ -2375,28 +2430,26 @@ async function handleCallback(cb, env) {
     if (data === "adm:bc_send") {
       const draft = env.SUBSCRIBERS_KV ? await env.SUBSCRIBERS_KV.get(`draft:${fromId}`, { type: "json" }) : null;
       if (!draft) {
-        await answerCb(env, cb.id, "Bản nháp đã hết hạn, vui lòng soạn lại.", true);
+        await answerCb(env, cb.id, "Bản nháp đã hết hạn.", true);
         return;
       }
-      await answerCb(env, cb.id, "🚀 Đang phát sóng thông báo...");
+      await answerCb(env, cb.id, "Đang phát sóng...");
       if (env.SUBSCRIBERS_KV) await env.SUBSCRIBERS_KV.delete(`draft:${fromId}`);
       let statusMid = messageId;
       if (msg && msg.photo) {
-        const sentWait = await sendMsg(env, chatId, "⏳ <b>Đang gửi thông báo tới tất cả người dùng...</b>");
+        const sentWait = await sendMsg(env, chatId, "⏳ Đang gửi thông báo...");
         statusMid = sentWait && sentWait.result && sentWait.result.message_id;
       } else {
-        await editMsg(env, chatId, messageId, "⏳ <b>Đang gửi thông báo tới tất cả người dùng...</b>");
+        await editMsg(env, chatId, messageId, "⏳ Đang gửi thông báo...");
       }
       const stat = await executeBroadcast(env, draft);
       const report = [
-        "✅ <b>PHÁT SÓNG THÔNG BÁO HOÀN TẤT!</b>",
-        "━━━━━━━━━━━━━━━━━━━━",
-        `📤 Đã gửi thành công: <b>${stat.sent}/${stat.total}</b> người`,
-        `🚫 Đã chặn bot (tự gỡ): <b>${stat.blocked}</b> người`,
-        `❌ Lỗi khác: <b>${stat.failed}</b> người`,
-        `⏱ Hoàn tất lúc: <code>${vnNowLabel()}</code>`,
+        "✅ <b>Đã phát sóng</b>",
+        LINE,
+        `Thành công: <b>${stat.sent}/${stat.total}</b> · Chặn: ${stat.blocked} · Lỗi: ${stat.failed}`,
+        `<code>${vnNowLabel()}</code>`,
       ].join("\n");
-      const doneKb = { inline_keyboard: [[{ text: "🛡️ Quay lại bảng Admin", callback_data: "adm:home" }]] };
+      const doneKb = { inline_keyboard: [[{ text: "⬅️ Admin", callback_data: "adm:home" }]] };
       if (statusMid) {
         await editMsg(env, chatId, statusMid, report, doneKb);
       } else {
@@ -2405,16 +2458,33 @@ async function handleCallback(cb, env) {
       return;
     }
     if (data === "adm:test_self") {
-      await answerCb(env, cb.id, "🧪 Đang gửi thông báo thử...");
-      const preview = formatBroadcastPayload("Kiểm tra đẩy thông báo tức thì từ Quản trị viên HUB Monitor Pro! 🔔", false);
+      await answerCb(env, cb.id, "Đang gửi thử...");
+      const preview = formatBroadcastPayload("Kiểm tra thông báo tức thì từ HUB Monitor.", false);
       await sendMsg(env, chatId, preview);
+      return;
+    }
+    if (data === "adm:scan_now") {
+      await answerCb(env, cb.id, "Đang quét 7 cổng HUB...");
+      await editMsg(env, chatId, messageId, "⏳ Đang quét 7 cổng HUB (ưu tiên Online HUB #1)...");
+      const res = await runAutoMonitorCron(env, true);
+      const msgReport = [
+        "✅ <b>Quét hoàn tất</b>",
+        LINE,
+        `Online HUB (#1): ${res.onlineOk ? "🟢 Trực tuyến" : "🟡 Tạm chậm"}`,
+        `Phản hồi: <b>${res.okCount}/${res.totalSources}</b> cổng`,
+        `Tin mới đẩy: <b>${res.pushedNotices}</b> (${res.totalDelivered} lượt gửi)`,
+        `<code>${vnNowLabel()}</code>`,
+      ].join("\n");
+      await editMsg(env, chatId, messageId, msgReport, {
+        inline_keyboard: [[{ text: "⬅️ Admin", callback_data: "adm:home" }]],
+      });
       return;
     }
     return;
   }
 
   if (data === "del:self") {
-    await answerCb(env, cb.id, "Đã ẩn");
+    await answerCb(env, cb.id);
     if (chatId && messageId) {
       await tgApi(env, "deleteMessage", { chat_id: chatId, message_id: messageId });
     }
@@ -2428,14 +2498,14 @@ async function handleCallback(cb, env) {
         env,
         chatId,
         messageId,
-        "🧹 <b>XÁC NHẬN DỌN LỊCH SỬ TRÒ CHUYỆN</b>\n━━━━━━━━━━━━━━━━━━━━\nBot sẽ xoá các tin nhắn gần đây (trong vòng 48 giờ theo quy định của Telegram).\n\nBạn muốn dọn bao nhiêu tin gần nhất?",
+        "<b>Dọn lịch sử chat</b>\n" + LINE + "\nChọn số tin gần nhất muốn xoá (trong 48 giờ):",
         {
           inline_keyboard: [
             [
-              { text: "🧹 Xoá 100 tin gần nhất", callback_data: "clear:run:100" },
-              { text: "🔥 Xoá tối đa (300 tin)", callback_data: "clear:run:300" },
+              { text: "🧹 100 tin", callback_data: "clear:run:100" },
+              { text: "🔥 300 tin", callback_data: "clear:run:300" },
             ],
-            [{ text: "⬅️ Huỷ & Quay lại Menu", callback_data: "m:home" }],
+            [{ text: "⬅️ Menu", callback_data: "m:home" }],
           ],
         }
       );
@@ -2445,17 +2515,17 @@ async function handleCallback(cb, env) {
 
   if (data.startsWith("clear:run:")) {
     const count = parseInt(data.split(":")[2], 10) || 100;
-    await answerCb(env, cb.id, "🧹 Đang dọn sạch chat...");
+    await answerCb(env, cb.id, "Đang dọn...");
     if (chatId && messageId) {
       await clearChatHistory(env, chatId, messageId, count);
       await sendMsg(
         env,
         chatId,
-        "🧹 <b>Đã dọn sạch lịch sử trò chuyện gần đây!</b>\n(Lưu ý: Telegram chỉ cho phép bot xoá tin nhắn trong vòng 48 giờ)",
+        "🧹 <b>Đã dọn lịch sử gần đây.</b>\n(Telegram giới hạn xoá tin trong 48 giờ)",
         {
           inline_keyboard: [[
-            { text: "📌 Mở Menu", callback_data: "m:home" },
-            { text: "🗑️ Ẩn tin này", callback_data: "del:self" },
+            { text: "📌 Menu", callback_data: "m:home" },
+            { text: "🗑️ Ẩn", callback_data: "del:self" },
           ]],
         }
       );
@@ -2464,48 +2534,49 @@ async function handleCallback(cb, env) {
   }
 
   if (data === "m:search_ask") {
-    await answerCb(env, cb.id, "Nhập từ khoá cần tìm...");
+    await answerCb(env, cb.id);
     if (chatId) {
       await sendMsg(
         env,
         chatId,
-        "🔎 <b>Nhập từ khoá bạn muốn tìm trên toàn hệ thống HUB</b>\n(Hỗ trợ không dấu, ví dụ: học bổng, lịch thi đợt 2, tốt nghiệp, MIS...)",
-        { force_reply: true, input_field_placeholder: "VD: hoc bong, lich thi, ngoai tru..." }
+        "🔎 <b>Nhập từ khoá cần tìm</b> (không cần dấu):",
+        { force_reply: true, input_field_placeholder: "VD: hoc bong, lich thi, hoc phi..." }
       );
     }
     return;
   }
 
-  // Toast phản hồi tức thì dưới 100ms khi bấm nút!
   const toast =
-    data.startsWith("v:") ? "📄 Đang trích xuất nội dung & file PDF..."
-    : data.startsWith("rf:") ? "🔄 Đang tải dữ liệu mới nhất..."
-    : data === "status" ? "📊 Đang ping 7 cổng HUB..."
+    data.startsWith("v:") ? "Đang mở bài viết..."
+    : data.startsWith("rf:") ? "Đang cập nhật..."
+    : data === "status" ? "Đang kiểm tra 7 cổng..."
     : data.startsWith("m:") ? ""
-    : "⏳ Đang tải...";
+    : "Đang tải...";
   await answerCb(env, cb.id, toast);
 
   if (!chatId || !messageId) return;
 
   try {
-    const view = await renderRoute(data, false, env);
+    const view = await renderRoute(data, false, env, ctx);
     await editMsg(env, chatId, messageId, view.text, view.markup);
   } catch (e) {
     log("handleCallback error", data, e);
-    const errText = `❌ Không thể tải mục này lúc này: <code>${escapeHtml(e.message || e)}</code>`;
+    const errText = `⚠️ Không thể tải: <code>${escapeHtml(e.message || e)}</code>`;
     await editMsg(env, chatId, messageId, errText, {
       inline_keyboard: [
-        [{ text: "🔄 Thử lại", callback_data: data }],
-        [{ text: "📌 Quay lại Menu chính", callback_data: "m:home" }],
+        [
+          { text: "🔄 Thử lại", callback_data: data },
+          { text: "📌 Menu", callback_data: "m:home" },
+        ],
       ],
     });
   }
 }
 
-async function handleInlineQuery(iq, env) {
+async function handleInlineQuery(iq, env, ctx = null) {
   const q = (iq.query || "").trim();
   try {
-    const data = await fetchAllSources(1, false, env);
+    const data = await fetchAllSources(1, false, env, ctx);
     let items = mergeAndDedupe(data.bySource, null);
     if (q) {
       const qn = stripAccents(q).toLowerCase();
@@ -2516,23 +2587,22 @@ async function handleInlineQuery(iq, env) {
       const cat = classifyItem(it.title, it.source);
       const cardText = [
         `${cat.icon} <b>${escapeHtml(it.title)}</b>`,
-        `━━━━━━━━━━━━━━━━━━━━`,
-        `🏢 <b>Nguồn:</b> ${src.emoji} ${escapeHtml(src.name)}`,
-        `📅 <b>Ngày đăng:</b> <code>${escapeHtml(it.date)}</code>`,
-        `🏷️ <code>${cat.tag}</code> · Chia sẻ qua HUB Monitor Pro`,
+        LINE,
+        `Nguồn: ${src.emoji} ${escapeHtml(src.name)}`,
+        `Ngày: <code>${escapeHtml(it.date)}</code> · <code>${cat.tag}</code>`,
       ].join("\n");
       return {
         type: "article",
         id: `${it.code}_${it.id}`.slice(0, 60),
         title: `${cat.icon} ${it.title.slice(0, 90)}`,
-        description: `${src.emoji} ${src.short} · 📅 ${it.date}`,
+        description: `${src.short} · ${it.date}`,
         input_message_content: {
           message_text: cardText,
           parse_mode: "HTML",
           disable_web_page_preview: true,
         },
         reply_markup: {
-          inline_keyboard: [[{ text: "🌐 Mở thông báo gốc", url: it.url }]],
+          inline_keyboard: [[{ text: "🌐 Mở bài viết", url: it.url }]],
         },
       };
     });
@@ -2548,13 +2618,13 @@ async function handleInlineQuery(iq, env) {
   }
 }
 
-async function processUpdate(update, env) {
+async function processUpdate(update, env, ctx = null) {
   if (update.callback_query) {
-    await handleCallback(update.callback_query, env);
+    await handleCallback(update.callback_query, env, ctx);
   } else if (update.message) {
-    await handleMessage(update.message, env);
+    await handleMessage(update.message, env, ctx);
   } else if (update.inline_query) {
-    await handleInlineQuery(update.inline_query, env);
+    await handleInlineQuery(update.inline_query, env, ctx);
   }
 }
 
@@ -2563,10 +2633,10 @@ async function processUpdate(update, env) {
 async function handleSetup(request, env) {
   const url = new URL(request.url);
   if (env.SETUP_SECRET && url.searchParams.get("key") !== env.SETUP_SECRET) {
-    return new Response("Forbidden (sai key)", { status: 403 });
+    return new Response("Forbidden", { status: 403 });
   }
   if (!env.BOT_TOKEN) {
-    return new Response("Thiếu biến môi trường BOT_TOKEN trong Cloudflare Worker!", { status: 500 });
+    return new Response("Missing BOT_TOKEN", { status: 500 });
   }
   const webhookUrl = `${url.origin}/webhook`;
   const [rHook, rCmds, rMenu] = await Promise.all([
@@ -2603,7 +2673,7 @@ export default {
     if (url.pathname === "/webhook" && request.method === "POST") {
       try {
         const update = await request.json();
-        ctx.waitUntil(processUpdate(update, env));
+        ctx.waitUntil(processUpdate(update, env, ctx));
       } catch (e) {
         log("webhook parse error", e);
       }
@@ -2628,17 +2698,24 @@ export default {
     }
     if (url.pathname === "/" && request.method === "GET") {
       return new Response(
-        "HUB Monitor Pro v2.0 — Telegram Webhook is running (9 HUB feeds + Khoa HTTTQL MIS)\n" +
-        "Open /setup to auto-register Webhook, Bot Commands & Blue Menu Button.",
+        "HUB Monitor — Running (7 HUB portals, Online HUB #1, 5m Cron)\n" +
+        "Open /setup to sync Webhook, Commands & Menu Button.",
         { headers: { "Content-Type": "text/plain; charset=utf-8" } }
       );
     }
     return new Response("Not found", { status: 404 });
   },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      runAutoMonitorCron(env, false).catch((e) => log("scheduled cron error", e))
+    );
+  },
 };
 
 export {
   SOURCES,
+  BOT_COMMANDS,
   parseOnlineItems,
   parseDnnNotif,
   parseDnnNews,
@@ -2646,5 +2723,18 @@ export {
   mergeAndDedupe,
   fetchArticleDetail,
   classifyItem,
-  isMisRelated,
+  runAutoMonitorCron,
+  mainMenuView,
+  portalsMenuView,
+  topicsMenuView,
+  searchMenuView,
+  quickLinksView,
+  authorView,
+  helpView,
+  buildAutoPushCard,
+  buildPaginatedListView,
+  buildDetailView,
+  buildDigestView,
+  buildStatusView,
+  formatBroadcastPayload,
 };

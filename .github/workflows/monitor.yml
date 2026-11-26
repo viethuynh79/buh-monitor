@@ -1,17 +1,16 @@
-name: HUB Monitor Pro
+name: HUB Monitor
 
 on:
-  schedule:
-    # Quét tự động toàn hệ sinh thái HUB mỗi 5 phút (mức nhanh nhất GitHub hỗ trợ)
-    - cron: '*/5 * * * *'
+  # Auto-push 5 phút/lần đã chuyển sang Cloudflare Workers Cron Trigger (*/5 * * * *)
+  # để chạy đúng chu kỳ 5 phút thật (không bị GitHub Actions free-tier delay) và tránh gửi trùng lặp.
   workflow_dispatch:
     inputs:
       test:
-        description: 'Nhập "true" để gửi thẻ tin mẫu + Bảng điều khiển Menu qua Telegram'
+        description: 'Nhập "true" để gửi 1 thẻ tin kiểm tra mẫu về Admin'
         required: false
         default: 'false'
       setup_bot:
-        description: 'Nhập "true" để đăng ký lại nút Menu xanh & danh sách lệnh Telegram'
+        description: 'Nhập "true" để đồng bộ nút Menu & danh sách lệnh Telegram'
         required: false
         default: 'false'
 
@@ -34,14 +33,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run HUB Monitor Pro
+      - name: Run HUB Monitor
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
-          FB_HTTTQL_RSS_URL: ${{ secrets.FB_HTTTQL_RSS_URL }}
-          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
-          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
         run: |
           if [ "${{ github.event.inputs.setup_bot }}" = "true" ]; then
             python monitor.py --setup-bot
