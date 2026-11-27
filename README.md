@@ -38,6 +38,14 @@ Bot Telegram tối giản theo dõi tự động **7 cổng thông tin chính th
 2. Mở `https://<worker>.workers.dev/setup` để đồng bộ Webhook (`my_chat_member`), lệnh cá nhân & nhóm, tên Bot **HUB News** và nút `Menu`.
 3. **Thêm vào Nhóm Telegram:** Bấm nút `➕ Thêm vào nhóm lớp` ngay trong `/menu` của BOT (hoặc thêm BOT từ mục *Thêm thành viên* trong nhóm) → BOT tự chào và tự đẩy thông báo 7 cổng HUB vào nhóm mỗi 5 phút. Nếu nhóm bật **Topics (Chủ đề)**, Quản trị nhóm gõ `/settopic` ngay trong chủ đề muốn nhận tin.
 
+## Ứng dụng Android (`android-app/`)
+
+Ứng dụng Android thuần Kotlin + Jetpack Compose + Material 3 kết nối trực tiếp JSON API trên Cloudflare Worker (`/api/news`, `/api/detail`, `/api/status`, `/api/announcements`):
+
+- **Thông báo đẩy nền tự động:** Chạy nền bằng Android `WorkManager` (tự khôi phục sau khởi động lại máy) + chế độ tuỳ chọn **Quét nhanh 5 phút**, hỗ trợ chọn riêng từng cổng HUB, lọc tin Khẩn và nhận trực tiếp phát sóng từ Quản trị viên (`/bc`, `/bc!`).
+- **Đọc nhanh & tải PDF:** Bấm thông báo để mở thẳng bài chi tiết, hạn nộp nổi bật và tải PDF vào `Downloads/HUBNews/`.
+- **Biên dịch tự động:** GitHub Actions (`.github/workflows/android-build.yml`) chạy unit test và xuất sẵn tệp `HUB-News-v1.0.0.apk`.
+
 ## Tác giả
 
 - [Huynh Viet](https://www.facebook.com/profile.php?id=61591547874181)

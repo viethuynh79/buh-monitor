@@ -1,0 +1,53 @@
+name: Build HUB News Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/android-build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Run Kotlin unit tests
+        run: gradle testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build installable Android APK
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Prepare named APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/HUB-News-v1.0.0.apk
+          ls -lh dist/HUB-News-v1.0.0.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HUB-News-Android-APK
+          path: android-app/dist/HUB-News-v1.0.0.apk
+          retention-days: 30
