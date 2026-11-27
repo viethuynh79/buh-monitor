@@ -1468,7 +1468,46 @@ async function deliverToTarget(env, target, text, markup = null, photoFileId = "
   return { status: "failed", res: r };
 }
 
+async function loadAdminAnnouncements(env) {
+  if (!env || !env.SUBSCRIBERS_KV) return [];
+  const edgeHit = await getEdgeCache("api_announcements_v1");
+  if (Array.isArray(edgeHit)) return edgeHit;
+  try {
+    const list = await env.SUBSCRIBERS_KV.get("state:broadcasts_v1", { type: "json" });
+    const safe = Array.isArray(list) ? list : [];
+    await putEdgeCache("api_announcements_v1", safe, 30);
+    return safe;
+  } catch (_) {
+    return [];
+  }
+}
+
+async function recordAdminAnnouncement(env, draft) {
+  if (!env || !env.SUBSCRIBERS_KV || !draft) return;
+  const text = String(draft.text || "").trim();
+  if (!text) return;
+  try {
+    const prev = (await env.SUBSCRIBERS_KV.get("state:broadcasts_v1", { type: "json" }).catch(() => null)) || [];
+    const entry = {
+      id: `bc_${Date.now()}`,
+      text,
+      urgent: Boolean(draft.urgent),
+      createdAt: Date.now(),
+      label: vnNowLabel(),
+      author: AUTHOR_NAME,
+    };
+    const next = [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 20);
+    await env.SUBSCRIBERS_KV.put("state:broadcasts_v1", JSON.stringify(next));
+    await putEdgeCache("api_announcements_v1", next, 30);
+  } catch (e) {
+    log("recordAdminAnnouncement error", e);
+  }
+}
+
 async function executeBroadcast(env, draft) {
+  if (!draft || !draft.groupsOnly) {
+    await recordAdminAnnouncement(env, draft);
+  }
   const users = await listAllSubscribers(env);
   const onlyGroups = Boolean(draft && draft.groupsOnly);
   const targets = users.filter(
@@ -3267,11 +3306,177 @@ async function handleSetup(request, env) {
   );
 }
 
+// ---------------------------------------------------------------- Android & Mobile JSON API
+
+function apiJsonResponse(payload, status = 200, maxAgeSec = 30) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Cache-Control": maxAgeSec > 0 ? `public, max-age=${maxAgeSec}` : "no-store",
+    },
+  });
+}
+
+function serializeSourceMeta(s) {
+  return {
+    key: s.key,
+    code: s.code,
+    name: s.name,
+    shortName: s.short,
+    emoji: s.emoji,
+    url: s.url,
+    priority: s.priority,
+  };
+}
+
+function enrichApiItem(it) {
+  const src = SOURCE_BY_KEY[it.source] || { emoji: "📌", name: it.source, short: it.source, priority: 99 };
+  const norm = stripAccents(it.title).toLowerCase();
+  const cat = classifyItem(it.title, it.source, norm);
+  const urgent = isUrgentTitle(it.title, norm);
+  return {
+    uid: `${it.code}:${it.id}`,
+    id: String(it.id),
+    code: String(it.code),
+    source: String(it.source),
+    sourceName: src.name,
+    sourceShort: src.short,
+    sourceEmoji: src.emoji,
+    priority: src.priority,
+    title: it.title,
+    date: it.date,
+    ts: it.ts || 0,
+    url: it.url,
+    topicKey: cat.key,
+    topicLabel: cat.label,
+    topicTag: cat.tag,
+    urgent,
+    alsoIn: Array.isArray(it.alsoIn) ? it.alsoIn : [],
+  };
+}
+
+async function handleApiNews(url, env, ctx) {
+  const sourceParam = (url.searchParams.get("source") || "all").trim().toLowerCase();
+  const topicParam = (url.searchParams.get("topic") || "all").trim().toLowerCase();
+  const daysRaw = parseInt(url.searchParams.get("days") || "", 10);
+  const days = Number.isFinite(daysRaw) && daysRaw > 0 ? Math.min(daysRaw, 90) : null;
+  const q = (url.searchParams.get("q") || "").trim();
+  const limitRaw = parseInt(url.searchParams.get("limit") || "80", 10);
+  const limit = Math.min(Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 80), 150);
+  const refresh = url.searchParams.get("refresh") === "1";
+
+  const onlinePages = days && days >= 30 ? 3 : (q ? 2 : 1);
+  const [data, announcements] = await Promise.all([
+    fetchAllSources(onlinePages, refresh, env, ctx),
+    loadAdminAnnouncements(env),
+  ]);
+
+  let items;
+  if (sourceParam !== "all" && SOURCE_BY_KEY[sourceParam]) {
+    let rawList = (data.bySource && data.bySource[sourceParam]) || [];
+    if (days !== null) {
+      const c = vnToday();
+      c.setUTCDate(c.getUTCDate() - days);
+      rawList = rawList.filter((it) => it.ts >= c.getTime());
+    }
+    items = rawList.map((it) => ({ ...it, alsoIn: [] }));
+  } else {
+    items = mergeAndDedupe(data.bySource || {}, days);
+  }
+
+  let enriched = items.map(enrichApiItem);
+
+  if (topicParam && topicParam !== "all") {
+    enriched = topicParam === "urgent"
+      ? enriched.filter((it) => it.urgent)
+      : enriched.filter((it) => it.topicKey === topicParam);
+  }
+
+  if (q) {
+    const qn = stripAccents(q).toLowerCase();
+    enriched = enriched.filter((it) => stripAccents(it.title).toLowerCase().includes(qn));
+  }
+
+  const snap = await loadHubSnapshot(env);
+  return apiJsonResponse({
+    ok: true,
+    brand: BOT_BRAND,
+    fetchedAt: data.fetchedAt || vnNowLabel(),
+    savedAt: (snap && snap.savedAt) || Date.now(),
+    author: { name: AUTHOR_NAME, fbUrl: AUTHOR_FB_URL },
+    sources: SOURCES.map(serializeSourceMeta),
+    health: data.health || [],
+    announcements: announcements.slice(0, 5),
+    total: enriched.length,
+    items: enriched.slice(0, limit),
+  }, 200, refresh ? 0 : 30);
+}
+
+async function handleApiDetail(url) {
+  const code = (url.searchParams.get("code") || "").trim().toLowerCase();
+  const id = (url.searchParams.get("id") || "").trim();
+  const refresh = url.searchParams.get("refresh") === "1";
+  if (!code || !id || !DETAIL_ROUTES[code]) {
+    return apiJsonResponse({ ok: false, error: "Tham số code/id không hợp lệ" }, 400, 0);
+  }
+  try {
+    const detail = await fetchArticleDetail(code, id, refresh);
+    const norm = stripAccents(detail.title).toLowerCase();
+    const cat = classifyItem(detail.title, detail.source, norm);
+    const urgent = isUrgentTitle(detail.title, norm);
+    return apiJsonResponse({
+      ok: true,
+      detail: {
+        code,
+        id,
+        ...detail,
+        topicKey: cat.key,
+        topicLabel: cat.label,
+        topicTag: cat.tag,
+        urgent,
+      },
+    }, 200, refresh ? 0 : 300);
+  } catch (e) {
+    return apiJsonResponse({ ok: false, error: String((e && e.message) || e) }, 502, 0);
+  }
+}
+
+async function handleApiStatus(url, env, ctx) {
+  const live = url.searchParams.get("live") === "1";
+  const data = await fetchAllSources(1, live, env, ctx);
+  const health = data.health || [];
+  const okCount = health.filter((h) => h.ok).length;
+  const totalItems = health.reduce((s, h) => s + (h.count || 0), 0);
+  return apiJsonResponse({
+    ok: true,
+    brand: BOT_BRAND,
+    fetchedAt: data.fetchedAt || vnNowLabel(),
+    okCount,
+    totalSources: SOURCES.length,
+    totalItems,
+    sources: SOURCES.map(serializeSourceMeta),
+    health,
+  }, 200, live ? 0 : 30);
+}
+
 // ---------------------------------------------------------------- Worker Entrypoint
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS" && url.pathname.startsWith("/api/")) {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      });
+    }
     if (url.pathname === "/webhook" && request.method === "POST") {
       try {
         const update = await request.json();
@@ -3283,6 +3488,19 @@ export default {
     }
     if (url.pathname === "/setup" && request.method === "GET") {
       return await handleSetup(request, env);
+    }
+    if (url.pathname === "/api/news" && request.method === "GET") {
+      return await handleApiNews(url, env, ctx);
+    }
+    if (url.pathname === "/api/detail" && request.method === "GET") {
+      return await handleApiDetail(url);
+    }
+    if (url.pathname === "/api/status" && request.method === "GET") {
+      return await handleApiStatus(url, env, ctx);
+    }
+    if (url.pathname === "/api/announcements" && request.method === "GET") {
+      const announcements = await loadAdminAnnouncements(env);
+      return apiJsonResponse({ ok: true, announcements }, 200, 30);
     }
     if (url.pathname === "/api/subscribers" && request.method === "GET") {
       if (!env.BOT_TOKEN) return new Response("Missing token", { status: 500 });
