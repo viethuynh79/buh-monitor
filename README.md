@@ -33,8 +33,15 @@ Bot Telegram tối giản theo dõi tự động **7 cổng thông tin chính th
 
 ## Triển khai
 
-1. Deploy `cloudflare-worker.js` lên Cloudflare Worker có biến `BOT_TOKEN`, `SUBSCRIBERS_KV`, và Cron Trigger `*/5 * * * *`.
-2. Mở `https://<worker>.workers.dev/setup` để đồng bộ Webhook, danh sách lệnh và nút `Menu`.
+### 1. Telegram Bot (`cloudflare-worker.js`)
+1. Deploy `cloudflare-worker.js` lên Cloudflare Worker (`buh-monitor`) có biến `BOT_TOKEN`, `SUBSCRIBERS_KV`, và Cron Trigger `*/5 * * * *`.
+2. Mở `https://<worker>.workers.dev/setup` để đồng bộ Webhook, danh sách lệnh, tên Bot **HUB News** và nút `Menu`.
+
+### 2. Zalo Bot (`zalo-worker.js` — Hỗ trợ chat 1-1 & thêm vào Nhóm Zalo)
+1. Mở Mini App **Zalo Bot Creator** (`bot.zapps.me`) trên Zalo → tạo Bot tên **HUB News** → sao chép `ZALO_BOT_TOKEN`.
+2. Deploy `zalo-worker.js` lên Cloudflare Worker (`hub-news-zalo`) dùng chung `SUBSCRIBERS_KV`, thêm secret `ZALO_BOT_TOKEN` (và `ZALO_ADMIN_PIN`) + Cron Trigger `1-59/5 * * * *`.
+3. Mở `https://hub-news-zalo.<subdomain>.workers.dev/setup` để đăng ký Webhook Zalo tự động.
+4. **Thêm Bot vào nhóm Zalo:** Trong **Zalo Bot Creator** (`bot.zapps.me`) → chọn Bot **HUB News** → **Mời Bot vào nhóm** → gửi link vào nhóm Zalo → Trưởng nhóm bấm **Xác nhận**. Trong nhóm, thành viên gõ `@HUB News /latest`, `@HUB News /menu`, hoặc `@HUB News <từ khoá>`.
 
 ## Tác giả
 
