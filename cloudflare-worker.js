@@ -1,7 +1,9 @@
 /**
- * HUB Monitor — Cloudflare Workers Telegram Bot & 5-Minute Auto-Push Cron
+ * HUB News — Cloudflare Workers Telegram Bot & 5-Minute Auto-Push Cron
  * 7 official portals of Ho Chi Minh University of Banking (HUB), Online HUB Priority #1.
  */
+
+const BOT_BRAND = "HUB News";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const VN_OFFSET = 7 * 3600 * 1000;
@@ -153,8 +155,8 @@ const TOPICS = {
 
 const BOT_COMMANDS = [
   { command: "menu",    description: "Bảng điều khiển chính" },
-  { command: "online",  description: "Online HUB (Ưu tiên #1)" },
   { command: "latest",  description: "Tin mới nhất (7 cổng HUB)" },
+  { command: "online",  description: "Online HUB (HUB Portal)" },
   { command: "full7d",  description: "Thông báo 7 ngày gần nhất" },
   { command: "full30d", description: "Thông báo 30 ngày gần nhất" },
   { command: "find",    description: "Tìm kiếm không dấu" },
@@ -1349,7 +1351,7 @@ async function adminHomeView(env, adminId) {
     : "⚡ Tự động 5p: Cloudflare Cron";
 
   const textLines = [
-    "<b>Quản trị · HUB Monitor</b>",
+    `<b>Quản trị · ${BOT_BRAND}</b>`,
     LINE,
     `👤 ${AUTHOR_NAME} · <code>${escapeHtml(adminId)}</code>`,
     `👥 Người dùng: <b>${users.length}</b> (🔔 ${active} · 🔕 ${muted})`,
@@ -1745,7 +1747,7 @@ async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
 
 function mainMenuView() {
   const text = [
-    "<b>HUB Monitor</b>",
+    `<b>${BOT_BRAND}</b>`,
     LINE,
     `🟢 Trực tuyến · <code>${vnNowLabel()}</code>`,
     `Tác giả: <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a>`,
@@ -1753,14 +1755,14 @@ function mainMenuView() {
 
   const markup = {
     inline_keyboard: [
-      [{ text: "🏛️ Online HUB · Tin mới nhất", callback_data: "src:online:1" }],
+      [{ text: "🔥 Tất cả cổng · Mới nhất", callback_data: "list:all:latest:1" }],
       [
-        { text: "🔥 Tất cả cổng", callback_data: "list:all:latest:1" },
-        { text: "📅 7 ngày", callback_data: "list:all:7:1" },
+        { text: "🏛️ Online HUB (#1)", callback_data: "src:online:1" },
+        { text: "🏢 7 cổng HUB", callback_data: "m:portals" },
       ],
       [
+        { text: "📅 7 ngày", callback_data: "list:all:7:1" },
         { text: "🗓️ 30 ngày", callback_data: "list:all:30:1" },
-        { text: "🏢 7 cổng HUB", callback_data: "m:portals" },
       ],
       [
         { text: "🏷️ Chủ đề", callback_data: "m:topics" },
@@ -1788,7 +1790,7 @@ function authorView() {
     "<b>Tác giả</b>",
     LINE,
     `👤 <b>${AUTHOR_NAME}</b>`,
-    "🤖 HUB Monitor · Tự động cập nhật thông báo HUB 24/7",
+    `🤖 ${BOT_BRAND} · Tự động cập nhật thông báo HUB 24/7`,
   ].join("\n");
 
   const markup = {
@@ -1809,6 +1811,7 @@ function portalsMenuView() {
 
   const markup = {
     inline_keyboard: [
+      [{ text: "🔥 Tất cả cổng HUB · Mới nhất", callback_data: "list:all:latest:1" }],
       [{ text: "🏛️ Online HUB · Ưu tiên #1", callback_data: "src:online:1" }],
       [
         { text: "📝 Khảo thí & ĐBCL", callback_data: "src:ktdbcl:1" },
@@ -1822,10 +1825,7 @@ function portalsMenuView() {
         { text: "🏫 Cổng Chính HUB", callback_data: "src:hub:1" },
         { text: "💰 Tài chính - KT", callback_data: "src:ketoan:1" },
       ],
-      [
-        { text: "🔥 Xem gộp tất cả", callback_data: "list:all:latest:1" },
-        { text: "⬅️ Menu", callback_data: "m:home" },
-      ],
+      [{ text: "⬅️ Menu", callback_data: "m:home" }],
     ],
   };
   return { text, markup };
@@ -1928,8 +1928,8 @@ function helpView() {
     "• Bấm số <b>1–5</b> dưới danh sách để đọc nhanh &amp; tải PDF",
     "",
     "<b>Lệnh nhanh</b>",
-    "<code>/online</code> · Online HUB (#1)",
     "<code>/latest</code> · Tin mới toàn HUB",
+    "<code>/online</code> · Online HUB (Portal)",
     "<code>/full7d</code> · <code>/full30d</code> · Theo thời gian",
     "<code>/thi</code> · <code>/daotao</code> · <code>/scc</code> · <code>/hocphi</code> · <code>/hocbong</code>",
     "<code>/digest</code> · <code>/status</code> · <code>/notify</code> · <code>/clear</code>",
@@ -1938,7 +1938,7 @@ function helpView() {
   const markup = {
     inline_keyboard: [
       [
-        { text: "🏛️ Online HUB", callback_data: "src:online:1" },
+        { text: "🔥 Tất cả cổng", callback_data: "list:all:latest:1" },
         { text: "⬅️ Menu", callback_data: "m:home" },
       ],
     ],
@@ -2167,7 +2167,7 @@ function buildStatusView(data) {
     inline_keyboard: [
       [
         { text: "🔄 Kiểm tra lại", callback_data: "rf:status" },
-        { text: "🏛️ Online HUB", callback_data: "src:online:1" },
+        { text: "🔥 Tất cả cổng", callback_data: "list:all:latest:1" },
       ],
       [{ text: "⬅️ Menu", callback_data: "m:home" }],
     ],
@@ -2417,7 +2417,7 @@ async function handleMessage(msg, env, ctx = null) {
       await sendMsg(env, chatId, "⛔ Chỉ dành cho Admin.");
       return;
     }
-    const preview = formatBroadcastPayload("Kiểm tra thông báo tức thì từ HUB Monitor.", false);
+    const preview = formatBroadcastPayload(`Kiểm tra thông báo tức thì từ ${BOT_BRAND}.`, false);
     await sendMsg(env, chatId, preview, { inline_keyboard: [[{ text: "⬅️ Admin", callback_data: "adm:home" }]] });
     return;
   }
@@ -2665,7 +2665,7 @@ async function handleCallback(cb, env, ctx = null) {
     }
     if (data === "adm:test_self") {
       await answerCb(env, cb.id, "Đang gửi thử...");
-      const preview = formatBroadcastPayload("Kiểm tra thông báo tức thì từ HUB Monitor.", false);
+      const preview = formatBroadcastPayload(`Kiểm tra thông báo tức thì từ ${BOT_BRAND}.`, false);
       await sendMsg(env, chatId, preview);
       return;
     }
@@ -2848,7 +2848,7 @@ async function handleSetup(request, env) {
     return new Response("Missing BOT_TOKEN", { status: 500 });
   }
   const webhookUrl = `${url.origin}/webhook`;
-  const [rHook, rCmds, rMenu] = await Promise.all([
+  const [rHook, rCmds, rMenu, rName] = await Promise.all([
     tgApi(env, "setWebhook", {
       url: webhookUrl,
       allowed_updates: ["message", "callback_query", "inline_query"],
@@ -2856,16 +2856,19 @@ async function handleSetup(request, env) {
     }),
     tgApi(env, "setMyCommands", { commands: BOT_COMMANDS }),
     tgApi(env, "setChatMenuButton", { menu_button: { type: "commands" } }),
+    tgApi(env, "setMyName", { name: BOT_BRAND }),
   ]);
 
   return new Response(
     JSON.stringify(
       {
         status: rHook.ok && rCmds.ok && rMenu.ok ? "ALL_OK" : "PARTIAL_ERROR",
+        bot_name: BOT_BRAND,
         webhook_url: webhookUrl,
         setWebhook: rHook,
         setMyCommands: rCmds,
         setChatMenuButton: rMenu,
+        setMyName: rName,
       },
       null,
       2
@@ -2907,8 +2910,8 @@ export default {
     }
     if (url.pathname === "/" && request.method === "GET") {
       return new Response(
-        "HUB Monitor — Running (7 HUB portals, Online HUB #1, 5m Cron)\n" +
-        "Open /setup to sync Webhook, Commands & Menu Button.",
+        `${BOT_BRAND} — Running (7 HUB portals, Online HUB #1, 5m Cron)\n` +
+        "Open /setup to sync Webhook, Commands, Bot Name & Menu Button.",
         { headers: { "Content-Type": "text/plain; charset=utf-8" } }
       );
     }

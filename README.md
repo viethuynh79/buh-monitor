@@ -1,4 +1,4 @@
-# HUB Monitor — Bot Telegram Thông Báo ĐH Ngân hàng TP.HCM (HUB)
+# HUB News — Bot Telegram Thông Báo ĐH Ngân hàng TP.HCM (HUB)
 
 Bot Telegram tối giản theo dõi tự động **7 cổng thông tin chính thức của Trường Đại học Ngân hàng TP.HCM (HUB)** với **Cloudflare Workers Cron Trigger mỗi 5 phút** và phản hồi nút bấm tức thì trên Cloudflare Edge.
 

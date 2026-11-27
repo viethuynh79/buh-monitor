@@ -1,4 +1,4 @@
-name: HUB Monitor
+name: HUB News
 
 on:
   # Auto-push 5 phút/lần đã chuyển sang Cloudflare Workers Cron Trigger (*/5 * * * *)
@@ -33,7 +33,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run HUB Monitor
+      - name: Run HUB News
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

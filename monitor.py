@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-HUB Monitor — Hệ thống theo dõi 7 cổng thông tin chính thức ĐH Ngân hàng TP.HCM (HUB).
+HUB News — Hệ thống theo dõi 7 cổng thông tin chính thức ĐH Ngân hàng TP.HCM (HUB).
 Ưu tiên #1: Cổng Sinh viên Online (https://online.hub.edu.vn/).
 
 Cách dùng thủ công:
@@ -40,7 +40,8 @@ USER_AGENT = (
 )
 
 VN_TZ = datetime.timezone(datetime.timedelta(hours=7))
-BOT_UI_VERSION = 5
+BOT_UI_VERSION = 6
+BOT_BRAND = "HUB News"
 LINE = "────────────"
 
 ONLINE_HOME = "https://online.hub.edu.vn/"
@@ -147,8 +148,8 @@ SOURCE_BY_KEY = {s["key"]: s for s in SOURCES}
 
 BOT_COMMANDS = [
     {"command": "menu", "description": "Bảng điều khiển chính"},
-    {"command": "online", "description": "Online HUB (Ưu tiên #1)"},
     {"command": "latest", "description": "Tin mới nhất (7 cổng HUB)"},
+    {"command": "online", "description": "Online HUB (HUB Portal)"},
     {"command": "full7d", "description": "Thông báo 7 ngày gần nhất"},
     {"command": "full30d", "description": "Thông báo 30 ngày gần nhất"},
     {"command": "find", "description": "Tìm kiếm không dấu"},
@@ -677,8 +678,9 @@ def telegram_send(token, chat_id, text, reply_markup=None, parse_mode="HTML"):
 def setup_bot_ui(token):
     r1 = telegram_api_call(token, "setMyCommands", {"commands": BOT_COMMANDS})
     r2 = telegram_api_call(token, "setChatMenuButton", {"menu_button": {"type": "commands"}})
+    telegram_api_call(token, "setMyName", {"name": BOT_BRAND})
     ok = bool(r1 and r2)
-    log("Đăng ký Bot Menu & Commands: {}".format("THÀNH CÔNG" if ok else "THẤT BẠI"))
+    log("Đăng ký Bot Menu, Commands & Name ({}): {}".format(BOT_BRAND, "THÀNH CÔNG" if ok else "THẤT BẠI"))
     return ok
 
 
@@ -709,14 +711,14 @@ def telegram_get_updates(token, offset):
 def build_main_menu_markup():
     return {
         "inline_keyboard": [
-            [{"text": "🏛️ Online HUB · Tin mới nhất", "callback_data": "src:online:1"}],
+            [{"text": "🔥 Tất cả cổng · Mới nhất", "callback_data": "list:all:latest:1"}],
             [
-                {"text": "🔥 Tất cả cổng", "callback_data": "list:all:latest:1"},
-                {"text": "📅 7 ngày", "callback_data": "list:all:7:1"},
+                {"text": "🏛️ Online HUB (#1)", "callback_data": "src:online:1"},
+                {"text": "🏢 7 cổng HUB", "callback_data": "m:portals"},
             ],
             [
+                {"text": "📅 7 ngày", "callback_data": "list:all:7:1"},
                 {"text": "🗓️ 30 ngày", "callback_data": "list:all:30:1"},
-                {"text": "🏢 7 cổng HUB", "callback_data": "m:portals"},
             ],
             [
                 {"text": "🏷️ Chủ đề", "callback_data": "m:topics"},
@@ -741,11 +743,11 @@ def build_main_menu_markup():
 def build_main_menu_text():
     now_vn = datetime.datetime.now(VN_TZ).strftime("%H:%M · %d/%m/%Y")
     return (
-        "<b>HUB Monitor</b>\n"
+        "<b>{}</b>\n"
         "{}\n"
         "🟢 Trực tuyến · <code>{}</code>\n"
         'Tác giả: <a href="{}">{}</a>'
-    ).format(LINE, now_vn, AUTHOR_FB_URL, AUTHOR_NAME)
+    ).format(BOT_BRAND, LINE, now_vn, AUTHOR_FB_URL, AUTHOR_NAME)
 
 
 def build_notification_card(item, extra_sources=None, detail=None, is_test=False):
@@ -987,7 +989,7 @@ def handle_commands(token, state, results_by_source):
             elif cmd in ("/author", "/about"):
                 telegram_send(
                     token, cid,
-                    "<b>Tác giả</b>\n{}\n👤 <b>{}</b>\n🤖 HUB Monitor · Tự động cập nhật thông báo HUB 24/7".format(LINE, AUTHOR_NAME),
+                    "<b>Tác giả</b>\n{}\n👤 <b>{}</b>\n🤖 {} · Tự động cập nhật thông báo HUB 24/7".format(LINE, AUTHOR_NAME, BOT_BRAND),
                     reply_markup={"inline_keyboard": [
                         [{"text": "📘 Facebook · {}".format(AUTHOR_NAME), "url": AUTHOR_FB_URL}],
                         [{"text": "⬅️ Menu", "callback_data": "m:home"}],
