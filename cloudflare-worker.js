@@ -1758,7 +1758,7 @@ function mainMenuView() {
       [{ text: "🔥 Tất cả cổng · Mới nhất", callback_data: "list:all:latest:1" }],
       [
         { text: "🏛️ Online HUB (#1)", callback_data: "src:online:1" },
-        { text: "🏢 7 cổng HUB", callback_data: "m:portals" },
+        { text: "🏢 Các Cổng HUB", callback_data: "m:portals" },
       ],
       [
         { text: "📅 7 ngày", callback_data: "list:all:7:1" },
