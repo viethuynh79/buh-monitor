@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,7 @@ import vn.hub.news.model.SourceMeta
 import vn.hub.news.model.ThemeMode
 import vn.hub.news.model.TimeFilter
 import vn.hub.news.model.prettyAttachmentName
+import vn.hub.news.model.stripVietnameseAccents
 import vn.hub.news.notify.HubNotificationManager
 import vn.hub.news.notify.HubSyncCoordinator
 
@@ -53,6 +55,7 @@ data class HubUiState(
     val health: List<PortalHealth> = emptyList(),
     val announcements: List<AdminAnnouncement> = emptyList(),
     val bookmarks: List<NewsItem> = emptyList(),
+    val bookmarkedUids: Set<String> = emptySet(),
     val unreadUids: Set<String> = emptySet(),
     val selectedSource: String = "all",
     val selectedTopic: String = "all",
@@ -71,6 +74,16 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
     private val api = HubApiClient()
     private val store = HubPreferencesStore(appContext)
 
+    // Pre-normalized text cache for zero-lag diacritic-insensitive search
+    private var normalizedTextByUid: Map<String, String> = emptyMap()
+
+    // Bounded in-memory LRU cache for instant (0ms) re-opening & prefetched articles
+    private val detailCache = object : LinkedHashMap<String, ArticleDetail>(48, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ArticleDetail>?): Boolean {
+            return size > 40
+        }
+    }
+
     private val _uiState = MutableStateFlow(HubUiState())
     val uiState: StateFlow<HubUiState> = _uiState.asStateFlow()
 
@@ -79,16 +92,74 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         refreshFeed(forceLive = false)
     }
 
+    private fun rebuildSearchIndex(items: List<NewsItem>) {
+        normalizedTextByUid = items.associate { item ->
+            item.uid to stripVietnameseAccents("${item.title} ${item.sourceName}")
+        }
+    }
+
+    private fun fastFilter(
+        items: List<NewsItem>,
+        selectedSource: String,
+        selectedTopic: String,
+        timeFilter: TimeFilter,
+        query: String,
+    ): List<NewsItem> {
+        val cutoffTs = timeFilter.days?.let { days ->
+            System.currentTimeMillis() - days.toLong() * 86_400_000L
+        }
+        val normQuery = stripVietnameseAccents(query.trim())
+
+        return items.filter { item ->
+            val matchSource = selectedSource == "all" ||
+                item.source == selectedSource ||
+                selectedSource in item.alsoIn
+            val matchTopic = when (selectedTopic) {
+                "all" -> true
+                "urgent" -> item.urgent
+                else -> item.topicKey == selectedTopic
+            }
+            val matchTime = cutoffTs == null || item.ts == 0L || item.ts >= cutoffTs
+            val matchQuery = if (normQuery.isBlank()) {
+                true
+            } else {
+                val indexed = normalizedTextByUid[item.uid]
+                    ?: stripVietnameseAccents("${item.title} ${item.sourceName}")
+                indexed.contains(normQuery)
+            }
+            matchSource && matchTopic && matchTime && matchQuery
+        }
+    }
+
+    private fun prefetchTopDetails(items: List<NewsItem>) {
+        val targets = items.take(3).filter { it.code.isNotBlank() && it.id.isNotBlank() }
+        if (targets.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            for (item in targets) {
+                val key = "${item.code}:${item.id}"
+                val alreadyCached = synchronized(detailCache) { detailCache.containsKey(key) }
+                if (alreadyCached) continue
+                try {
+                    val detail = api.fetchDetail(code = item.code, id = item.id)
+                    synchronized(detailCache) { detailCache[key] = detail }
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+
     private fun hydrateFromCache() {
         val cached = store.loadCachedFeed()
         val prefs = store.getPreferences()
         val bookmarks = store.getBookmarks()
+        val bookmarkIds = bookmarks.map { it.uid }.toSet()
         val unread = store.getUnreadUids()
         val hasPerm = HubNotificationManager.hasNotificationPermission(appContext)
 
         if (cached != null) {
+            rebuildSearchIndex(cached.items)
             _uiState.update { cur ->
-                val filtered = NewsDiffEngine.filterLocalItems(
+                val filtered = fastFilter(
                     items = cached.items,
                     selectedSource = cur.selectedSource,
                     selectedTopic = cur.selectedTopic,
@@ -104,6 +175,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     health = cached.health,
                     announcements = cached.announcements,
                     bookmarks = bookmarks,
+                    bookmarkedUids = bookmarkIds,
                     unreadUids = unread,
                     prefs = prefs,
                     hasNotificationPermission = hasPerm,
@@ -113,6 +185,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update {
                 it.copy(
                     bookmarks = bookmarks,
+                    bookmarkedUids = bookmarkIds,
                     unreadUids = unread,
                     prefs = prefs,
                     hasNotificationPermission = hasPerm,
@@ -151,7 +224,6 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     store.saveCachedFeed(feed)
                 }
 
-                // Seed seen state on first launch so background worker never spams old items
                 if (!store.hasSeededSeen()) {
                     val diff = NewsDiffEngine.computeDiff(
                         feedItems = feed.items,
@@ -165,8 +237,9 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     store.saveSeenState(diff.updatedSeenUids, diff.updatedSeenAnnIds, 0)
                 }
 
+                rebuildSearchIndex(feed.items)
                 _uiState.update { cur ->
-                    val filtered = NewsDiffEngine.filterLocalItems(
+                    val filtered = fastFilter(
                         items = feed.items,
                         selectedSource = cur.selectedSource,
                         selectedTopic = cur.selectedTopic,
@@ -186,6 +259,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                         errorMessage = "",
                     )
                 }
+                prefetchTopDetails(feed.items)
             } catch (e: Exception) {
                 _uiState.update { cur ->
                     cur.copy(
@@ -200,7 +274,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectSource(sourceKey: String) {
         _uiState.update { cur ->
-            val filtered = NewsDiffEngine.filterLocalItems(
+            val filtered = fastFilter(
                 items = cur.allItems,
                 selectedSource = sourceKey,
                 selectedTopic = cur.selectedTopic,
@@ -213,7 +287,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectTopic(topicKey: String) {
         _uiState.update { cur ->
-            val filtered = NewsDiffEngine.filterLocalItems(
+            val filtered = fastFilter(
                 items = cur.allItems,
                 selectedSource = cur.selectedSource,
                 selectedTopic = topicKey,
@@ -227,7 +301,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
     fun selectTimeFilter(filter: TimeFilter) {
         val needsRemote = filter == TimeFilter.DAYS_30 || _uiState.value.timeFilter == TimeFilter.DAYS_30
         _uiState.update { cur ->
-            val filtered = NewsDiffEngine.filterLocalItems(
+            val filtered = fastFilter(
                 items = cur.allItems,
                 selectedSource = cur.selectedSource,
                 selectedTopic = cur.selectedTopic,
@@ -241,10 +315,29 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun resetFilters() {
+        _uiState.update { cur ->
+            val filtered = fastFilter(
+                items = cur.allItems,
+                selectedSource = "all",
+                selectedTopic = "all",
+                timeFilter = TimeFilter.LATEST,
+                query = "",
+            )
+            cur.copy(
+                selectedSource = "all",
+                selectedTopic = "all",
+                timeFilter = TimeFilter.LATEST,
+                searchQuery = "",
+                filteredItems = filtered,
+            )
+        }
+    }
+
     fun setSearchVisible(visible: Boolean) {
         _uiState.update { cur ->
             val nextQuery = if (visible) cur.searchQuery else ""
-            val filtered = NewsDiffEngine.filterLocalItems(
+            val filtered = fastFilter(
                 items = cur.allItems,
                 selectedSource = cur.selectedSource,
                 selectedTopic = cur.selectedTopic,
@@ -257,7 +350,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSearchQuery(query: String) {
         _uiState.update { cur ->
-            val filtered = NewsDiffEngine.filterLocalItems(
+            val filtered = fastFilter(
                 items = cur.allItems,
                 selectedSource = cur.selectedSource,
                 selectedTopic = cur.selectedTopic,
@@ -286,10 +379,33 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         fallbackTitle: String = "",
         fallbackUrl: String = "",
         fallbackSource: String = "",
+        forceReload: Boolean = false,
     ) {
         if (code.isBlank() || id.isBlank()) return
         val uid = "$code:$id"
         val nextUnread = store.markRead(uid)
+        val cachedDetail = if (forceReload) null else synchronized(detailCache) { detailCache[uid] }
+
+        if (cachedDetail != null) {
+            _uiState.update {
+                it.copy(
+                    unreadUids = nextUnread,
+                    detailSheet = DetailSheetState(
+                        open = true,
+                        loading = false,
+                        code = code,
+                        id = id,
+                        fallbackTitle = fallbackTitle,
+                        fallbackUrl = fallbackUrl,
+                        fallbackSource = fallbackSource,
+                        detail = cachedDetail,
+                        error = "",
+                    ),
+                )
+            }
+            return
+        }
+
         _uiState.update {
             it.copy(
                 unreadUids = nextUnread,
@@ -306,7 +422,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             try {
-                val detail = api.fetchDetail(code = code, id = id)
+                val detail = api.fetchDetail(code = code, id = id, refresh = forceReload)
+                synchronized(detailCache) { detailCache[uid] = detail }
                 _uiState.update { cur ->
                     if (cur.detailSheet.code == code && cur.detailSheet.id == id) {
                         cur.copy(
@@ -343,10 +460,12 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleBookmark(item: NewsItem) {
         val updated = store.toggleBookmark(item)
-        val saved = updated.any { it.uid == item.uid }
+        val ids = updated.map { it.uid }.toSet()
+        val saved = item.uid in ids
         _uiState.update {
             it.copy(
                 bookmarks = updated,
+                bookmarkedUids = ids,
                 snackbarMessage = if (saved) "Đã lưu thông báo để xem nhanh" else "Đã bỏ khỏi danh sách lưu",
             )
         }
@@ -434,13 +553,14 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val found = HubSyncCoordinator.runSyncOnce(appContext, forceRefresh = true)
                 val cached = store.loadCachedFeed()
+                val items = cached?.items ?: _uiState.value.allItems
+                rebuildSearchIndex(items)
                 _uiState.update { cur ->
-                    val items = cached?.items ?: cur.allItems
                     cur.copy(
                         isSyncingNow = false,
                         fetchedAt = cached?.fetchedAt ?: cur.fetchedAt,
                         allItems = items,
-                        filteredItems = NewsDiffEngine.filterLocalItems(
+                        filteredItems = fastFilter(
                             items = items,
                             selectedSource = cur.selectedSource,
                             selectedTopic = cur.selectedTopic,

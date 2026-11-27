@@ -42,12 +42,12 @@ jobs:
       - name: Prepare named APK
         run: |
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/HUB-News-v1.0.0.apk
-          ls -lh dist/HUB-News-v1.0.0.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/HUB-News-v1.1.0.apk
+          ls -lh dist/HUB-News-v1.1.0.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: HUB-News-Android-APK
-          path: android-app/dist/HUB-News-v1.0.0.apk
+          path: android-app/dist/HUB-News-v1.1.0.apk
           retention-days: 30

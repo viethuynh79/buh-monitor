@@ -1,15 +1,30 @@
 package vn.hub.news.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,11 +32,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
@@ -30,16 +49,15 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Campaign
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
@@ -47,6 +65,8 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -62,13 +82,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -77,19 +101,32 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
+import vn.hub.news.BuildConfig
+import vn.hub.news.R
 import vn.hub.news.model.AdminAnnouncement
 import vn.hub.news.model.HubCatalog
 import vn.hub.news.model.NewsItem
@@ -98,12 +135,12 @@ import vn.hub.news.model.SourceMeta
 import vn.hub.news.model.ThemeMode
 import vn.hub.news.model.TimeFilter
 import vn.hub.news.model.prettyAttachmentName
-import vn.hub.news.ui.theme.HubGold
+import vn.hub.news.ui.theme.HubNavy
 import vn.hub.news.ui.theme.HubNewsTheme
 import vn.hub.news.ui.theme.HubOnlineGreen
-import vn.hub.news.ui.theme.HubUrgent
-import vn.hub.news.ui.theme.HubUrgentBg
+import vn.hub.news.ui.theme.HubRed
 import vn.hub.news.ui.theme.HubWarnAmber
+import vn.hub.news.ui.theme.HubWhite
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -114,6 +151,20 @@ fun HubNewsApp(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+
+    // Preserved scroll state per tab + smooth tap-active-tab-to-top
+    val feedListState = rememberLazyListState()
+    val portalsListState = rememberLazyListState()
+    val bookmarksListState = rememberLazyListState()
+    val settingsListState = rememberLazyListState()
+
+    val showScrollTop by remember {
+        derivedStateOf {
+            selectedTab == 0 && feedListState.firstVisibleItemIndex >= 4
+        }
+    }
 
     LaunchedEffect(state.snackbarMessage) {
         if (state.snackbarMessage.isNotBlank()) {
@@ -125,105 +176,240 @@ fun HubNewsApp(
     HubNewsTheme(themeMode = state.prefs.themeMode) {
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
+            floatingActionButton = {
+                AnimatedVisibility(
+                    visible = showScrollTop,
+                    enter = fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.85f),
+                    exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.85f),
+                ) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            scope.launch { feedListState.animateScrollToItem(0) }
+                        },
+                        containerColor = HubNavy,
+                        contentColor = HubWhite,
+                        shape = CircleShape,
+                    ) {
+                        Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "Lên đầu trang")
+                    }
+                }
+            },
             topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    title = {
-                        Column {
+                Column {
+                    TopAppBar(
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = HubNavy,
+                            titleContentColor = HubWhite,
+                            actionIconContentColor = HubWhite,
+                        ),
+                        title = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "HUB News",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                StatusDotPill(
-                                    online = state.errorMessage.isBlank(),
-                                    label = if (state.fetchedAt.isNotBlank()) state.fetchedAt.substringBefore(" ·") else "Trực tuyến",
-                                )
-                            }
-                            Text(
-                                text = when (selectedTab) {
-                                    0 -> "7 cổng chính thức · Ưu tiên Online HUB"
-                                    1 -> "Các Cổng HUB & Tiện ích sinh viên"
-                                    2 -> "Thông báo đã lưu (${state.bookmarks.size})"
-                                    else -> "Thông báo tự động & Cài đặt"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    },
-                    actions = {
-                        if (selectedTab == 0) {
-                            if (state.unreadUids.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.markAllRead() }) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.DoneAll,
-                                        contentDescription = "Đánh dấu đã đọc",
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = HubWhite,
+                                    modifier = Modifier.size(36.dp),
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.hub_logo),
+                                        contentDescription = "Logo HUB",
+                                        contentScale = ContentScale.Fit,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(3.dp),
+                                    )
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "HUB News",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            color = HubWhite,
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        HeaderStatusPill(
+                                            online = state.errorMessage.isBlank(),
+                                            label = if (state.fetchedAt.isNotBlank()) {
+                                                state.fetchedAt.substringBefore(" ·")
+                                            } else {
+                                                "Trực tuyến"
+                                            },
+                                        )
+                                    }
+                                    Text(
+                                        text = when (selectedTab) {
+                                            0 -> "7 cổng chính thức · Ưu tiên Online HUB"
+                                            1 -> "Các Cổng HUB & Tiện ích sinh viên"
+                                            2 -> "Thông báo đã lưu (${state.bookmarks.size})"
+                                            else -> "Thông báo tự động & Cài đặt"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = HubWhite.copy(alpha = 0.84f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                             }
-                            IconButton(onClick = { viewModel.setSearchVisible(!state.searchVisible) }) {
-                                Icon(
-                                    imageVector = if (state.searchVisible) Icons.Rounded.Close else Icons.Rounded.Search,
-                                    contentDescription = "Tìm kiếm",
-                                )
+                        },
+                        actions = {
+                            if (selectedTab == 0) {
+                                if (state.unreadUids.isNotEmpty()) {
+                                    IconButton(onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        viewModel.markAllRead()
+                                    }) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.DoneAll,
+                                            contentDescription = "Đánh dấu đã đọc",
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.setSearchVisible(!state.searchVisible)
+                                }) {
+                                    Icon(
+                                        imageVector = if (state.searchVisible) Icons.Rounded.Close else Icons.Rounded.Search,
+                                        contentDescription = "Tìm kiếm",
+                                    )
+                                }
+                                IconButton(onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.refreshFeed(forceLive = true)
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Refresh,
+                                        contentDescription = "Làm mới",
+                                    )
+                                }
+                            } else if (selectedTab == 1) {
+                                IconButton(onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.checkPortalStatusLive()
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Refresh,
+                                        contentDescription = "Kiểm tra trực tiếp 7 cổng",
+                                    )
+                                }
                             }
-                            IconButton(onClick = { viewModel.refreshFeed(forceLive = true) }) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Refresh,
-                                    contentDescription = "Làm mới",
-                                )
-                            }
-                        } else if (selectedTab == 1) {
-                            IconButton(onClick = { viewModel.checkPortalStatusLive() }) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Refresh,
-                                    contentDescription = "Kiểm tra trực tiếp 7 cổng",
-                                )
-                            }
-                        }
-                    },
-                )
+                        },
+                    )
+                    // Signature HUB Crimson Red hairline accent beneath HUB Navy header
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(HubRed),
+                    )
+                }
             },
             bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp,
-                ) {
-                    NavigationBarItem(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        icon = { Icon(Icons.Rounded.Newspaper, contentDescription = null) },
-                        label = { Text("Tin mới") },
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        icon = { Icon(Icons.Rounded.AccountBalance, contentDescription = null) },
-                        label = { Text("Cổng HUB") },
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        icon = { Icon(Icons.Rounded.Bookmark, contentDescription = null) },
-                        label = { Text("Đã lưu") },
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 },
-                        icon = {
-                            Icon(
-                                if (state.prefs.notificationsEnabled) Icons.Rounded.NotificationsActive else Icons.Rounded.Settings,
-                                contentDescription = null,
-                            )
-                        },
-                        label = { Text("Cài đặt") },
-                    )
+                Column {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f))
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 0.dp,
+                    ) {
+                        val navColors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = HubWhite,
+                            selectedTextColor = MaterialTheme.colorScheme.primary,
+                            indicatorColor = HubNavy,
+                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        NavigationBarItem(
+                            selected = selectedTab == 0,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                if (selectedTab == 0) {
+                                    scope.launch { feedListState.animateScrollToItem(0) }
+                                } else {
+                                    selectedTab = 0
+                                }
+                            },
+                            icon = {
+                                BadgedBox(
+                                    badge = {
+                                        val count = state.unreadUids.size
+                                        if (count > 0) {
+                                            Badge(containerColor = HubRed, contentColor = HubWhite) {
+                                                Text(if (count > 99) "99+" else count.toString())
+                                            }
+                                        }
+                                    },
+                                ) {
+                                    Icon(Icons.Rounded.Newspaper, contentDescription = null)
+                                }
+                            },
+                            label = { Text("Tin mới") },
+                            colors = navColors,
+                        )
+                        NavigationBarItem(
+                            selected = selectedTab == 1,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                if (selectedTab == 1) {
+                                    scope.launch { portalsListState.animateScrollToItem(0) }
+                                } else {
+                                    selectedTab = 1
+                                }
+                            },
+                            icon = { Icon(Icons.Rounded.AccountBalance, contentDescription = null) },
+                            label = { Text("Cổng HUB") },
+                            colors = navColors,
+                        )
+                        NavigationBarItem(
+                            selected = selectedTab == 2,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                if (selectedTab == 2) {
+                                    scope.launch { bookmarksListState.animateScrollToItem(0) }
+                                } else {
+                                    selectedTab = 2
+                                }
+                            },
+                            icon = {
+                                BadgedBox(
+                                    badge = {
+                                        val count = state.bookmarks.size
+                                        if (count > 0) {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            ) {
+                                                Text(if (count > 99) "99+" else count.toString())
+                                            }
+                                        }
+                                    },
+                                ) {
+                                    Icon(Icons.Rounded.Bookmark, contentDescription = null)
+                                }
+                            },
+                            label = { Text("Đã lưu") },
+                            colors = navColors,
+                        )
+                        NavigationBarItem(
+                            selected = selectedTab == 3,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                if (selectedTab == 3) {
+                                    scope.launch { settingsListState.animateScrollToItem(0) }
+                                } else {
+                                    selectedTab = 3
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    if (state.prefs.notificationsEnabled) Icons.Rounded.NotificationsActive else Icons.Rounded.Settings,
+                                    contentDescription = null,
+                                )
+                            },
+                            label = { Text("Cài đặt") },
+                            colors = navColors,
+                        )
+                    }
                 }
             },
         ) { innerPadding ->
@@ -233,31 +419,46 @@ fun HubNewsApp(
                     .padding(innerPadding)
                     .background(MaterialTheme.colorScheme.background),
             ) {
-                when (selectedTab) {
-                    0 -> FeedTab(
-                        state = state,
-                        viewModel = viewModel,
-                        onRequestPermission = onRequestNotificationPermission,
-                    )
-                    1 -> PortalsTab(
-                        state = state,
-                        onOpenPortalFeed = { key ->
-                            viewModel.selectSource(key)
-                            selectedTab = 0
-                        },
-                        onCheckLive = { viewModel.checkPortalStatusLive() },
-                        onOpenUrl = { viewModel.openExternalUrl(it) },
-                    )
-                    2 -> BookmarksTab(
-                        bookmarks = state.bookmarks,
-                        onOpen = { viewModel.openArticle(it) },
-                        onRemove = { viewModel.toggleBookmark(it) },
-                    )
-                    3 -> SettingsTab(
-                        state = state,
-                        viewModel = viewModel,
-                        onRequestPermission = onRequestNotificationPermission,
-                    )
+                Crossfade(
+                    targetState = selectedTab,
+                    animationSpec = tween(durationMillis = 180),
+                    label = "hub_tab_crossfade",
+                ) { tab ->
+                    when (tab) {
+                        0 -> FeedTab(
+                            state = state,
+                            listState = feedListState,
+                            viewModel = viewModel,
+                            onRequestPermission = onRequestNotificationPermission,
+                        )
+                        1 -> PortalsTab(
+                            state = state,
+                            listState = portalsListState,
+                            onOpenPortalFeed = { key ->
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.selectSource(key)
+                                selectedTab = 0
+                                scope.launch { feedListState.scrollToItem(0) }
+                            },
+                            onCheckLive = { viewModel.checkPortalStatusLive() },
+                            onOpenUrl = { viewModel.openExternalUrl(it) },
+                        )
+                        2 -> BookmarksTab(
+                            bookmarks = state.bookmarks,
+                            listState = bookmarksListState,
+                            onOpen = { viewModel.openArticle(it) },
+                            onRemove = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.toggleBookmark(it)
+                            },
+                        )
+                        else -> SettingsTab(
+                            state = state,
+                            listState = settingsListState,
+                            viewModel = viewModel,
+                            onRequestPermission = onRequestNotificationPermission,
+                        )
+                    }
                 }
             }
         }
@@ -265,7 +466,7 @@ fun HubNewsApp(
         if (state.detailSheet.open) {
             ArticleDetailSheet(
                 detailState = state.detailSheet,
-                isBookmarked = state.bookmarks.any { it.uid == "${state.detailSheet.code}:${state.detailSheet.id}" },
+                isBookmarked = "${state.detailSheet.code}:${state.detailSheet.id}" in state.bookmarkedUids,
                 onDismiss = { viewModel.closeDetailSheet() },
                 onRetry = {
                     viewModel.openArticleByCodeId(
@@ -274,9 +475,11 @@ fun HubNewsApp(
                         fallbackTitle = state.detailSheet.fallbackTitle,
                         fallbackUrl = state.detailSheet.fallbackUrl,
                         fallbackSource = state.detailSheet.fallbackSource,
+                        forceReload = true,
                     )
                 },
                 onToggleBookmark = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     val d = state.detailSheet.detail
                     val item = state.allItems.firstOrNull {
                         it.code == state.detailSheet.code && it.id == state.detailSheet.id
@@ -299,19 +502,25 @@ fun HubNewsApp(
                     viewModel.toggleBookmark(item)
                 },
                 onOpenUrl = { viewModel.openExternalUrl(it) },
-                onDownloadPdf = { url, idx -> viewModel.downloadAttachment(url, idx) },
-                onShare = { title, url -> viewModel.shareArticle(title, url) },
+                onDownloadPdf = { url, idx ->
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.downloadAttachment(url, idx)
+                },
+                onShare = { title, url ->
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    viewModel.shareArticle(title, url)
+                },
             )
         }
     }
 }
 
 @Composable
-private fun StatusDotPill(online: Boolean, label: String) {
-    val dotColor = if (online) HubOnlineGreen else HubWarnAmber
+private fun HeaderStatusPill(online: Boolean, label: String) {
+    val dotColor = if (online) Color(0xFF5CE0A0) else HubWarnAmber
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = dotColor.copy(alpha = 0.12f),
+        color = HubWhite.copy(alpha = 0.14f),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
@@ -327,7 +536,85 @@ private fun StatusDotPill(online: Boolean, label: String) {
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = dotColor,
+                color = HubWhite,
+            )
+        }
+    }
+}
+
+@Composable
+private fun rememberShimmerBrush(): Brush {
+    val base = MaterialTheme.colorScheme.surfaceVariant
+    val highlight = MaterialTheme.colorScheme.surface
+    val transition = rememberInfiniteTransition(label = "shimmer_transition")
+    val shift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 900f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1050, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "shimmer_shift",
+    )
+    return Brush.linearGradient(
+        colors = listOf(base, highlight, base),
+        start = Offset(shift - 300f, 0f),
+        end = Offset(shift, 180f),
+    )
+}
+
+@Composable
+private fun ShimmerArticleCard(
+    brush: Brush,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .width(96.dp)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(brush),
+                )
+                Spacer(Modifier.weight(1f))
+                Box(
+                    modifier = Modifier
+                        .width(64.dp)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(brush),
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(brush),
+            )
+            Spacer(Modifier.height(7.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.74f)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(brush),
+            )
+            Spacer(Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .width(72.dp)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(brush),
             )
         }
     }
@@ -337,30 +624,39 @@ private fun StatusDotPill(online: Boolean, label: String) {
 @Composable
 private fun FeedTab(
     state: HubUiState,
+    listState: LazyListState,
     viewModel: HubViewModel,
     onRequestPermission: () -> Unit,
 ) {
+    val haptic = LocalHapticFeedback.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
+
     PullToRefreshBox(
         isRefreshing = state.isRefreshing,
-        onRefresh = { viewModel.refreshFeed(forceLive = true) },
+        onRefresh = {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            viewModel.refreshFeed(forceLive = true)
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 24.dp),
+            contentPadding = PaddingValues(top = 10.dp, bottom = 84.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (!state.hasNotificationPermission) {
-                item(key = "perm_banner") {
+                item(key = "perm_banner", contentType = "banner") {
                     PermissionBanner(
                         onGrant = onRequestPermission,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
             }
 
             if (state.announcements.isNotEmpty()) {
-                item(key = "admin_ann") {
+                item(key = "admin_ann", contentType = "banner") {
                     AdminAnnouncementBanner(
                         announcement = state.announcements.first(),
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -368,8 +664,11 @@ private fun FeedTab(
                 }
             }
 
-            item(key = "search_bar") {
-                AnimatedVisibility(visible = state.searchVisible) {
+            item(key = "search_bar", contentType = "search") {
+                AnimatedVisibility(
+                    visible = state.searchVisible,
+                    modifier = Modifier.animateContentSize(),
+                ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -382,6 +681,8 @@ private fun FeedTab(
                             placeholder = { Text("Tìm không dấu: hoc bong, lich thi, hoc phi...") },
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
                             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                             trailingIcon = {
                                 if (state.searchQuery.isNotBlank()) {
@@ -393,11 +694,19 @@ private fun FeedTab(
                         )
                         Spacer(Modifier.height(6.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            items(HubCatalog.QUICK_KEYWORDS) { kw ->
+                            items(HubCatalog.QUICK_KEYWORDS, key = { it }) { kw ->
                                 FilterChip(
                                     selected = state.searchQuery.equals(kw, ignoreCase = true),
-                                    onClick = { viewModel.updateSearchQuery(kw) },
+                                    onClick = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        viewModel.updateSearchQuery(kw)
+                                        keyboard?.hide()
+                                    },
                                     label = { Text(kw, style = MaterialTheme.typography.labelMedium) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = HubRed,
+                                        selectedLabelColor = HubWhite,
+                                    ),
                                 )
                             }
                         }
@@ -406,7 +715,7 @@ private fun FeedTab(
             }
 
             // Priority filter strip: All Portals FIRST -> Online HUB (#1) -> Remaining 6 portals
-            item(key = "source_strip") {
+            item(key = "source_strip", contentType = "chips") {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -414,23 +723,32 @@ private fun FeedTab(
                     item(key = "src_all") {
                         FilterChip(
                             selected = state.selectedSource == "all",
-                            onClick = { viewModel.selectSource("all") },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.selectSource("all")
+                                scope.launch { listState.animateScrollToItem(0) }
+                            },
                             label = { Text("Tất cả cổng") },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedContainerColor = HubNavy,
+                                selectedLabelColor = HubWhite,
                             ),
                         )
                     }
                     items(state.sources, key = { it.key }) { src ->
-                        val label = if (src.key == "online") "Online HUB (#1)" else src.shortName
+                        val isOnline = src.key == "online"
+                        val label = if (isOnline) "Online HUB (#1)" else src.shortName
                         FilterChip(
                             selected = state.selectedSource == src.key,
-                            onClick = { viewModel.selectSource(src.key) },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.selectSource(src.key)
+                                scope.launch { listState.animateScrollToItem(0) }
+                            },
                             label = { Text(label) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedContainerColor = if (isOnline) HubRed else HubNavy,
+                                selectedLabelColor = HubWhite,
                             ),
                         )
                     }
@@ -438,7 +756,7 @@ private fun FeedTab(
             }
 
             // Time & Topic filter row
-            item(key = "topic_time_strip") {
+            item(key = "topic_time_strip", contentType = "chips") {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -446,7 +764,10 @@ private fun FeedTab(
                     items(TimeFilter.entries, key = { it.name }) { tf ->
                         FilterChip(
                             selected = state.timeFilter == tf,
-                            onClick = { viewModel.selectTimeFilter(tf) },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.selectTimeFilter(tf)
+                            },
                             label = { Text(tf.label) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -458,15 +779,22 @@ private fun FeedTab(
                         val selected = state.selectedTopic == tp.key
                         FilterChip(
                             selected = selected,
-                            onClick = { viewModel.selectTopic(if (selected) "all" else tp.key) },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.selectTopic(if (selected) "all" else tp.key)
+                            },
                             label = { Text(tp.label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = if (tp.key == "urgent") HubRed else HubNavy,
+                                selectedLabelColor = HubWhite,
+                            ),
                         )
                     }
                 }
             }
 
             // Counter header
-            item(key = "feed_meta") {
+            item(key = "feed_meta", contentType = "meta") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -479,16 +807,15 @@ private fun FeedTab(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (state.selectedSource != "all" || state.selectedTopic != "all" || state.searchQuery.isNotBlank()) {
+                    if (state.selectedSource != "all" || state.selectedTopic != "all" || state.searchQuery.isNotBlank() || state.timeFilter != TimeFilter.LATEST) {
                         Text(
                             text = "Đặt lại bộ lọc",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.clickable {
-                                viewModel.selectSource("all")
-                                viewModel.selectTopic("all")
-                                viewModel.selectTimeFilter(TimeFilter.LATEST)
-                                viewModel.updateSearchQuery("")
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.resetFilters()
                             },
                         )
                     }
@@ -496,26 +823,15 @@ private fun FeedTab(
             }
 
             if (state.isLoading && state.allItems.isEmpty()) {
-                item(key = "loading") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 64.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(strokeWidth = 3.dp)
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = "Đang tải tin từ 7 cổng HUB...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                items(6, key = { "shimmer_$it" }, contentType = { "shimmer" }) {
+                    val brush = rememberShimmerBrush()
+                    ShimmerArticleCard(
+                        brush = brush,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
                 }
             } else if (state.errorMessage.isNotBlank() && state.filteredItems.isEmpty()) {
-                item(key = "error") {
+                item(key = "error", contentType = "status") {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -527,18 +843,21 @@ private fun FeedTab(
                             modifier = Modifier.padding(20.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Icon(Icons.Rounded.Warning, contentDescription = null, tint = HubWarnAmber, modifier = Modifier.size(32.dp))
+                            Icon(Icons.Rounded.Warning, contentDescription = null, tint = HubRed, modifier = Modifier.size(32.dp))
                             Spacer(Modifier.height(8.dp))
                             Text(state.errorMessage, style = MaterialTheme.typography.bodyMedium)
                             Spacer(Modifier.height(12.dp))
-                            Button(onClick = { viewModel.refreshFeed(forceLive = true) }) {
+                            Button(
+                                onClick = { viewModel.refreshFeed(forceLive = true) },
+                                colors = ButtonDefaults.buttonColors(containerColor = HubNavy, contentColor = HubWhite),
+                            ) {
                                 Text("Thử tải lại")
                             }
                         }
                     }
                 }
             } else if (state.filteredItems.isEmpty()) {
-                item(key = "empty") {
+                item(key = "empty", contentType = "status") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -553,15 +872,23 @@ private fun FeedTab(
                     }
                 }
             } else {
-                val bookmarkIds = state.bookmarks.map { it.uid }.toSet()
-                items(state.filteredItems, key = { it.uid }) { item ->
+                items(
+                    items = state.filteredItems,
+                    key = { it.uid },
+                    contentType = { "article" },
+                ) { item ->
                     NewsArticleCard(
                         item = item,
                         isUnread = item.uid in state.unreadUids,
-                        isBookmarked = item.uid in bookmarkIds,
+                        isBookmarked = item.uid in state.bookmarkedUids,
                         onClick = { viewModel.openArticle(item) },
-                        onBookmark = { viewModel.toggleBookmark(item) },
-                        modifier = Modifier.padding(horizontal = 16.dp),
+                        onBookmark = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.toggleBookmark(item)
+                        },
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .animateItem(),
                     )
                 }
             }
@@ -577,7 +904,8 @@ private fun PermissionBanner(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.28f)),
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -586,25 +914,26 @@ private fun PermissionBanner(
             Icon(
                 imageVector = Icons.Rounded.NotificationsActive,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = MaterialTheme.colorScheme.secondary,
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Bật quyền thông báo đẩy",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                 )
                 Text(
                     text = "Nhận tin mới từ 7 cổng HUB ngay cả khi đóng ứng dụng.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = onGrant,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = HubRed, contentColor = HubWhite),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
             ) {
                 Text("Bật")
             }
@@ -617,13 +946,21 @@ private fun AdminAnnouncementBanner(
     announcement: AdminAnnouncement,
     modifier: Modifier = Modifier,
 ) {
-    val bg = if (announcement.urgent) HubUrgentBg else MaterialTheme.colorScheme.secondaryContainer
-    val accent = if (announcement.urgent) HubUrgent else MaterialTheme.colorScheme.onSecondaryContainer
+    val bg = if (announcement.urgent) {
+        MaterialTheme.colorScheme.secondaryContainer
+    } else {
+        MaterialTheme.colorScheme.primaryContainer
+    }
+    val accent = if (announcement.urgent) {
+        MaterialTheme.colorScheme.secondary
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = bg),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.25f)),
+        border = BorderStroke(1.dp, accent.copy(alpha = 0.3f)),
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -666,6 +1003,13 @@ private fun NewsArticleCard(
     onBookmark: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isOnline = item.source == "online"
+    val stripeColor = when {
+        item.urgent -> HubRed
+        isOnline -> HubRed.copy(alpha = 0.85f)
+        else -> HubNavy
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -673,107 +1017,117 @@ private fun NewsArticleCard(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(
-            width = if (item.urgent) 1.dp else 0.7.dp,
-            color = if (item.urgent) HubUrgent.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+            width = if (item.urgent) 1.15.dp else 0.75.dp,
+            color = if (item.urgent) MaterialTheme.colorScheme.secondary.copy(alpha = 0.48f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.72f),
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Column(modifier = Modifier.padding(15.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+        ) {
+            // Signature HUB vertical accent bar (Crimson Red for Online/Urgent, Deep Navy for portals)
+            Box(
+                modifier = Modifier
+                    .width(3.5.dp)
+                    .fillMaxHeight()
+                    .background(stripeColor),
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
             ) {
-                if (isUnread) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(HubGold),
-                    )
-                    Spacer(Modifier.width(7.dp))
-                }
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (item.source == "online") {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant
-                    },
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = if (item.source == "online") "Online HUB · #1" else item.sourceShort,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (item.source == "online") {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                    )
-                }
-                Spacer(Modifier.width(6.dp))
-                if (item.urgent) {
+                    if (isUnread) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(HubRed),
+                        )
+                        Spacer(Modifier.width(7.dp))
+                    }
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = HubUrgent.copy(alpha = 0.14f),
+                        color = if (isOnline) HubNavy else MaterialTheme.colorScheme.primaryContainer,
                     ) {
                         Text(
-                            text = "KHẨN",
+                            text = if (isOnline) "Online HUB · #1" else item.sourceShort,
                             style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = HubUrgent,
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            color = if (isOnline) HubWhite else MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         )
                     }
                     Spacer(Modifier.width(6.dp))
-                }
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = item.date,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            Spacer(Modifier.height(9.dp))
-
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            Spacer(Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = item.topicTag,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                if (item.alsoIn.isNotEmpty()) {
+                    if (item.urgent) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = HubRed,
+                        ) {
+                            Text(
+                                text = "KHẨN",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = HubWhite,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
                     Text(
-                        text = " · +${item.alsoIn.size} cổng khác",
+                        text = item.date,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Spacer(Modifier.weight(1f))
-                IconButton(
-                    onClick = onBookmark,
-                    modifier = Modifier.size(32.dp),
+
+                Spacer(Modifier.height(8.dp))
+
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
-                        contentDescription = "Lưu thông báo",
-                        tint = if (isBookmarked) HubGold else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp),
+                    Text(
+                        text = item.topicTag,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (item.urgent) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
                     )
+                    if (item.alsoIn.isNotEmpty()) {
+                        Text(
+                            text = " · +${item.alsoIn.size} cổng khác",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(
+                        onClick = onBookmark,
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                            contentDescription = "Lưu thông báo",
+                            tint = if (isBookmarked) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }
@@ -783,6 +1137,7 @@ private fun NewsArticleCard(
 @Composable
 private fun PortalsTab(
     state: HubUiState,
+    listState: LazyListState,
     onOpenPortalFeed: (String) -> Unit,
     onCheckLive: () -> Unit,
     onOpenUrl: (String) -> Unit,
@@ -790,11 +1145,12 @@ private fun PortalsTab(
     val healthByKey = remember(state.health) { state.health.associateBy { it.key } }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item(key = "portals_header") {
+        item(key = "portals_header", contentType = "header") {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -811,6 +1167,7 @@ private fun PortalsTab(
                 OutlinedButton(
                     onClick = onCheckLive,
                     enabled = !state.isCheckingStatus,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                 ) {
                     if (state.isCheckingStatus) {
@@ -822,37 +1179,53 @@ private fun PortalsTab(
             }
         }
 
-        item(key = "portal_all_card") {
+        item(key = "portal_all_card", contentType = "featured") {
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onOpenPortalFeed("all") },
                 shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+                colors = CardDefaults.cardColors(containerColor = HubNavy),
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.Bolt, contentDescription = null, tint = HubGold)
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Tất cả cổng HUB · Mới nhất",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                        )
-                        Text(
-                            text = "Gộp & khử trùng toàn bộ 7 cổng (${state.allItems.size} tin)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
-                        )
+                Column {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = HubRed,
+                            modifier = Modifier.size(38.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Rounded.Bolt, contentDescription = null, tint = HubWhite)
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Tất cả cổng HUB · Mới nhất",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = HubWhite,
+                            )
+                            Text(
+                                text = "Gộp & khử trùng toàn bộ 7 cổng (${state.allItems.size} tin)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = HubWhite.copy(alpha = 0.84f),
+                            )
+                        }
                     }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(HubRed),
+                    )
                 }
             }
         }
 
-        items(state.sources, key = { it.key }) { src ->
+        items(state.sources, key = { it.key }, contentType = { "portal" }) { src ->
             PortalCard(
                 src = src,
                 health = healthByKey[src.key],
@@ -861,29 +1234,38 @@ private fun PortalsTab(
             )
         }
 
-        item(key = "utils_header") {
+        item(key = "utils_header", contentType = "header") {
             Spacer(Modifier.height(8.dp))
             Text("Tiện ích sinh viên HUB", style = MaterialTheme.typography.titleMedium)
         }
 
-        items(HubCatalog.UTILITIES, key = { it.url }) { util ->
+        items(HubCatalog.UTILITIES, key = { it.url }, contentType = { "utility" }) { util ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onOpenUrl(util.url) },
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
+                border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Language,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Rounded.Language,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(util.title, style = MaterialTheme.typography.titleSmall)
@@ -916,7 +1298,7 @@ private fun PortalCard(
         health == null -> MaterialTheme.colorScheme.outline
         health.ok && !health.fallback -> HubOnlineGreen
         health.ok && health.fallback -> HubWarnAmber
-        else -> HubUrgent
+        else -> HubRed
     }
     val subText = when {
         health == null -> "Sẵn sàng đồng bộ"
@@ -931,7 +1313,10 @@ private fun PortalCard(
             .clickable(onClick = onOpenFeed),
         shape = RoundedCornerShape(15.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+        border = BorderStroke(
+            width = if (src.priority == 1) 1.15.dp else 0.75.dp,
+            color = if (src.priority == 1) MaterialTheme.colorScheme.secondary.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.75f),
+        ),
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -954,12 +1339,12 @@ private fun PortalCard(
                         Spacer(Modifier.width(6.dp))
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            color = HubRed,
                         ) {
                             Text(
                                 text = "Ưu tiên #1",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                color = HubWhite,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             )
                         }
@@ -987,6 +1372,7 @@ private fun PortalCard(
 @Composable
 private fun BookmarksTab(
     bookmarks: List<NewsItem>,
+    listState: LazyListState,
     onOpen: (NewsItem) -> Unit,
     onRemove: (NewsItem) -> Unit,
 ) {
@@ -1018,17 +1404,19 @@ private fun BookmarksTab(
     }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(bookmarks, key = { it.uid }) { item ->
+        items(bookmarks, key = { it.uid }, contentType = { "article" }) { item ->
             NewsArticleCard(
                 item = item,
                 isUnread = false,
                 isBookmarked = true,
                 onClick = { onOpen(item) },
                 onBookmark = { onRemove(item) },
+                modifier = Modifier.animateItem(),
             )
         }
     }
@@ -1037,27 +1425,35 @@ private fun BookmarksTab(
 @Composable
 private fun SettingsTab(
     state: HubUiState,
+    listState: LazyListState,
     viewModel: HubViewModel,
     onRequestPermission: () -> Unit,
 ) {
     val prefs = state.prefs
+    val haptic = LocalHapticFeedback.current
+    val switchColors = SwitchDefaults.colors(
+        checkedThumbColor = HubWhite,
+        checkedTrackColor = HubNavy,
+    )
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item(key = "notify_card") {
+        item(key = "notify_card", contentType = "settings") {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+                border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f)),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = if (prefs.notificationsEnabled) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = if (prefs.notificationsEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.width(10.dp))
                         Text("Thông báo tự động", style = MaterialTheme.typography.titleMedium)
@@ -1065,8 +1461,9 @@ private fun SettingsTab(
                     Spacer(Modifier.height(12.dp))
 
                     if (!state.hasNotificationPermission) {
-                        OutlinedButton(
+                        Button(
                             onClick = onRequestPermission,
+                            colors = ButtonDefaults.buttonColors(containerColor = HubRed, contentColor = HubWhite),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Icon(Icons.Rounded.Notifications, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1080,7 +1477,11 @@ private fun SettingsTab(
                         title = "Tự động báo tin mới HUB",
                         subtitle = "Chạy nền bằng WorkManager (tự khôi phục sau khi khởi động lại máy)",
                         checked = prefs.notificationsEnabled,
-                        onCheckedChange = { viewModel.setNotificationsEnabled(it) },
+                        colors = switchColors,
+                        onCheckedChange = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setNotificationsEnabled(it)
+                        },
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
 
@@ -1089,7 +1490,11 @@ private fun SettingsTab(
                         subtitle = "Theo dõi sát từng 5 phút như BOT (phù hợp tuần đăng ký học phần)",
                         checked = prefs.fastFiveMinMode,
                         enabled = prefs.notificationsEnabled,
-                        onCheckedChange = { viewModel.setFastFiveMinMode(it) },
+                        colors = switchColors,
+                        onCheckedChange = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setFastFiveMinMode(it)
+                        },
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
 
@@ -1098,7 +1503,11 @@ private fun SettingsTab(
                         subtitle = "Lọc riêng hạn cuối, huỷ học phần, cảnh báo và thông báo Admin",
                         checked = prefs.urgentOnly,
                         enabled = prefs.notificationsEnabled,
-                        onCheckedChange = { viewModel.setUrgentOnly(it) },
+                        colors = switchColors,
+                        onCheckedChange = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            viewModel.setUrgentOnly(it)
+                        },
                     )
 
                     Spacer(Modifier.height(12.dp))
@@ -1114,22 +1523,31 @@ private fun SettingsTab(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Button(
-                            onClick = { viewModel.syncAndNotifyNow() },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.syncAndNotifyNow()
+                            },
                             enabled = !state.isSyncingNow,
+                            colors = ButtonDefaults.buttonColors(containerColor = HubNavy, contentColor = HubWhite),
                             modifier = Modifier.weight(1f),
                         ) {
                             if (state.isSyncingNow) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
                                     strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    color = HubWhite,
                                 )
                                 Spacer(Modifier.width(6.dp))
                             }
                             Text("Quét tin ngay")
                         }
                         OutlinedButton(
-                            onClick = { viewModel.sendTestNotification() },
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.sendTestNotification()
+                            },
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary),
                             modifier = Modifier.weight(1f),
                         ) {
                             Text("Thông báo thử")
@@ -1139,11 +1557,11 @@ private fun SettingsTab(
             }
         }
 
-        item(key = "portal_toggles") {
+        item(key = "portal_toggles", contentType = "settings") {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+                border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f)),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Chọn cổng nhận thông báo", style = MaterialTheme.typography.titleMedium)
@@ -1170,7 +1588,11 @@ private fun SettingsTab(
                             Switch(
                                 checked = enabled,
                                 enabled = prefs.notificationsEnabled,
-                                onCheckedChange = { viewModel.toggleMutedSource(src.key) },
+                                colors = switchColors,
+                                onCheckedChange = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.toggleMutedSource(src.key)
+                                },
                             )
                         }
                         if (idx < state.sources.lastIndex) {
@@ -1181,11 +1603,11 @@ private fun SettingsTab(
             }
         }
 
-        item(key = "theme_card") {
+        item(key = "theme_card", contentType = "settings") {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+                border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f)),
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Giao diện hiển thị", style = MaterialTheme.typography.titleMedium)
@@ -1197,8 +1619,15 @@ private fun SettingsTab(
                         ThemeMode.entries.forEach { mode ->
                             FilterChip(
                                 selected = prefs.themeMode == mode,
-                                onClick = { viewModel.setThemeMode(mode) },
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    viewModel.setThemeMode(mode)
+                                },
                                 label = { Text(mode.label) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = HubNavy,
+                                    selectedLabelColor = HubWhite,
+                                ),
                                 modifier = Modifier.weight(1f),
                             )
                         }
@@ -1207,11 +1636,11 @@ private fun SettingsTab(
             }
         }
 
-        item(key = "author_card") {
+        item(key = "author_card", contentType = "about") {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(0.7.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
+                border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f)),
             ) {
                 Row(
                     modifier = Modifier
@@ -1220,24 +1649,43 @@ private fun SettingsTab(
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = HubWhite,
+                        border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.size(44.dp),
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.hub_logo),
+                            contentDescription = "Logo HUB",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Tác giả: ${HubCatalog.AUTHOR_NAME}", style = MaterialTheme.typography.titleSmall)
                         Text(
-                            text = "HUB News · Tự động cập nhật thông báo HUB 24/7",
+                            text = "HUB News · v${BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = "Tác giả: ${HubCatalog.AUTHOR_NAME}",
                             style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "ĐH Ngân hàng TP.HCM · Cập nhật 24/7",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                         contentDescription = "Facebook",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(18.dp),
                     )
                 }
@@ -1252,6 +1700,7 @@ private fun SettingSwitchRow(
     subtitle: String,
     checked: Boolean,
     enabled: Boolean = true,
+    colors: SwitchColors = SwitchDefaults.colors(),
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -1274,6 +1723,7 @@ private fun SettingSwitchRow(
         Switch(
             checked = checked,
             enabled = enabled,
+            colors = colors,
             onCheckedChange = onCheckedChange,
         )
     }
@@ -1306,7 +1756,7 @@ private fun ArticleDetailSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
+                .padding(horizontal = 20.dp, vertical = 6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1314,12 +1764,12 @@ private fun ArticleDetailSheet(
             ) {
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = HubNavy,
                 ) {
                     Text(
                         text = d?.sourceName?.ifBlank { detailState.fallbackSource } ?: detailState.fallbackSource.ifBlank { "HUB News" },
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        color = HubWhite,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
@@ -1336,7 +1786,7 @@ private fun ArticleDetailSheet(
                     Icon(
                         imageVector = if (isBookmarked) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
                         contentDescription = "Lưu",
-                        tint = if (isBookmarked) HubGold else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (isBookmarked) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if (displayUrl.isNotBlank()) {
@@ -1366,19 +1816,25 @@ private fun ArticleDetailSheet(
                 Spacer(Modifier.height(10.dp))
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = HubUrgentBg,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.28f)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
                         modifier = Modifier.padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Rounded.Schedule, contentDescription = null, tint = HubUrgent, modifier = Modifier.size(18.dp))
+                        Icon(
+                            Icons.Rounded.Schedule,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(18.dp),
+                        )
                         Spacer(Modifier.width(8.dp))
                         Text(
                             text = "Hạn: ${d.deadline}",
                             style = MaterialTheme.typography.titleSmall,
-                            color = HubUrgent,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
                 }
@@ -1391,13 +1847,17 @@ private fun ArticleDetailSheet(
 
             when {
                 detailState.loading -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        CircularProgressIndicator(strokeWidth = 3.dp)
+                    val brush = rememberShimmerBrush()
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        repeat(4) { idx ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(if (idx == 3) 0.65f else 1f)
+                                    .height(15.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(brush),
+                            )
+                        }
                     }
                 }
                 detailState.error.isNotBlank() -> {
@@ -1410,7 +1870,7 @@ private fun ArticleDetailSheet(
                         Text(
                             text = detailState.error,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
+                            color = MaterialTheme.colorScheme.secondary,
                         )
                         Spacer(Modifier.height(10.dp))
                         OutlinedButton(onClick = onRetry) {
@@ -1464,7 +1924,7 @@ private fun ArticleDetailSheet(
                                     Icon(
                                         imageVector = Icons.Rounded.PictureAsPdf,
                                         contentDescription = null,
-                                        tint = HubUrgent,
+                                        tint = MaterialTheme.colorScheme.secondary,
                                     )
                                     Spacer(Modifier.width(10.dp))
                                     Text(
@@ -1475,13 +1935,13 @@ private fun ArticleDetailSheet(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     TextButton(onClick = { onOpenUrl(fileUrl) }) {
-                                        Text("Mở")
+                                        Text("Mở", color = MaterialTheme.colorScheme.primary)
                                     }
                                     IconButton(onClick = { onDownloadPdf(fileUrl, idx) }) {
                                         Icon(
                                             imageVector = Icons.Rounded.Download,
                                             contentDescription = "Tải về máy",
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = MaterialTheme.colorScheme.secondary,
                                         )
                                     }
                                 }
@@ -1507,14 +1967,28 @@ private fun ArticleDetailSheet(
 
             if (displayUrl.isNotBlank()) {
                 Spacer(Modifier.height(14.dp))
-                Button(
-                    onClick = { onOpenUrl(displayUrl) },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Mở bài viết gốc trên cổng HUB")
+                    Button(
+                        onClick = { onOpenUrl(displayUrl) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = HubNavy, contentColor = HubWhite),
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Mở bài gốc HUB")
+                    }
+                    OutlinedButton(
+                        onClick = { onShare(displayTitle, displayUrl) },
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary),
+                    ) {
+                        Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Chia sẻ")
+                    }
                 }
             }
 

@@ -14,53 +14,58 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import vn.hub.news.model.ThemeMode
 
-val HubNavy = Color(0xFF0B1F3A)
-val HubNavyLight = Color(0xFF17365D)
-val HubGold = Color(0xFFC9972C)
-val HubGoldSoft = Color(0xFFF6EBD3)
-val HubUrgent = Color(0xFFC62828)
-val HubUrgentBg = Color(0xFFFFEBEE)
+// Exact brand palette sampled directly from the official HUB University crest logo
+val HubWhite = Color(0xFFFFFFFF)
+val HubNavy = Color(0xFF203469)        // Xanh Đậm chủ đạo của Logo HUB
+val HubNavyDeep = Color(0xFF15254F)    // Xanh Đậm nhấn sâu
+val HubNavySoft = Color(0xFFE8EEF8)    // Nền xanh nhạt hài hòa
+val HubRed = Color(0xFFA71B28)         // Đỏ HUB chủ đạo của Logo HUB
+val HubRedSoft = Color(0xFFFBE9EB)     // Nền đỏ nhạt tinh tế
 val HubOnlineGreen = Color(0xFF1B8A5A)
 val HubWarnAmber = Color(0xFFD9820B)
 
 private val LightColors = lightColorScheme(
     primary = HubNavy,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE3ECF7),
+    onPrimary = HubWhite,
+    primaryContainer = HubNavySoft,
     onPrimaryContainer = HubNavy,
-    secondary = HubGold,
-    onSecondary = Color(0xFF1A1200),
-    secondaryContainer = HubGoldSoft,
-    onSecondaryContainer = Color(0xFF4A3400),
-    background = Color(0xFFF7F8FA),
-    onBackground = Color(0xFF111827),
-    surface = Color.White,
-    onSurface = Color(0xFF111827),
-    surfaceVariant = Color(0xFFEEF2F6),
-    onSurfaceVariant = Color(0xFF526071),
-    outline = Color(0xFFD8E0EA),
-    error = HubUrgent,
-    onError = Color.White,
+    secondary = HubRed,
+    onSecondary = HubWhite,
+    secondaryContainer = HubRedSoft,
+    onSecondaryContainer = HubRed,
+    tertiary = HubRed,
+    onTertiary = HubWhite,
+    background = Color(0xFFF6F7FA),
+    onBackground = Color(0xFF141E36),
+    surface = HubWhite,
+    onSurface = Color(0xFF141E36),
+    surfaceVariant = Color(0xFFEEF1F7),
+    onSurfaceVariant = Color(0xFF4B5978),
+    outline = Color(0xFFD5DCEB),
+    error = HubRed,
+    onError = HubWhite,
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF8AB8F0),
-    onPrimary = Color(0xFF061529),
-    primaryContainer = Color(0xFF152C4C),
-    onPrimaryContainer = Color(0xFFDCEBFF),
-    secondary = Color(0xFFE2B857),
-    onSecondary = Color(0xFF1F1600),
-    secondaryContainer = Color(0xFF3D2E0A),
-    onSecondaryContainer = Color(0xFFFBE2A2),
-    background = Color(0xFF0B111A),
-    onBackground = Color(0xFFF0F4F8),
-    surface = Color(0xFF121A26),
-    onSurface = Color(0xFFF0F4F8),
-    surfaceVariant = Color(0xFF1C2738),
-    onSurfaceVariant = Color(0xFFA6B4C6),
-    outline = Color(0xFF28364A),
-    error = Color(0xFFFF7B7B),
-    onError = Color(0xFF2A0000),
+    primary = Color(0xFF8AA8E6),
+    onPrimary = Color(0xFF0E1B3A),
+    primaryContainer = HubNavy,
+    onPrimaryContainer = HubWhite,
+    secondary = Color(0xFFE86B76),
+    onSecondary = Color(0xFF2D0409),
+    secondaryContainer = Color(0xFF5C1119),
+    onSecondaryContainer = Color(0xFFFFDADE),
+    tertiary = Color(0xFFE86B76),
+    onTertiary = Color(0xFF2D0409),
+    background = Color(0xFF0C1426),
+    onBackground = HubWhite,
+    surface = Color(0xFF131E36),
+    onSurface = HubWhite,
+    surfaceVariant = Color(0xFF1D2C4D),
+    onSurfaceVariant = Color(0xFFB3C0DC),
+    outline = Color(0xFF2B3E66),
+    error = Color(0xFFFF7A85),
+    onError = Color(0xFF2D0409),
 )
 
 // 100% upright minimalist typography (FontStyle.Normal everywhere)

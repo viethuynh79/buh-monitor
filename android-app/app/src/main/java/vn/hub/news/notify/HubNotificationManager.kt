@@ -31,6 +31,8 @@ object HubNotificationManager {
 
     private const val GROUP_KEY_HUB = "vn.hub.news.GROUP_NOTICES"
     const val FOREGROUND_SERVICE_ID = 9001
+    private const val COLOR_HUB_NAVY = 0xFF203469.toInt()
+    private const val COLOR_HUB_RED = 0xFFA71B28.toInt()
 
     fun createChannels(context: Context) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -96,6 +98,7 @@ object HubNotificationManager {
         )
         return NotificationCompat.Builder(context, CHANNEL_MONITOR)
             .setSmallIcon(R.drawable.ic_stat_hub)
+            .setColor(COLOR_HUB_NAVY)
             .setContentTitle("HUB News · Đang theo dõi 7 cổng")
             .setContentText(subtitle)
             .setOngoing(true)
@@ -135,6 +138,7 @@ object HubNotificationManager {
 
         val notification = NotificationCompat.Builder(context, channel)
             .setSmallIcon(R.drawable.ic_stat_hub)
+            .setColor(if (item.urgent) COLOR_HUB_RED else COLOR_HUB_NAVY)
             .setContentTitle(contentTitle)
             .setContentText(item.title)
             .setSubText(item.date)
@@ -178,6 +182,7 @@ object HubNotificationManager {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_URGENT)
             .setSmallIcon(R.drawable.ic_stat_hub)
+            .setColor(COLOR_HUB_RED)
             .setContentTitle(title)
             .setContentText(announcement.text)
             .setSubText(announcement.label)
@@ -213,6 +218,7 @@ object HubNotificationManager {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ONLINE)
             .setSmallIcon(R.drawable.ic_stat_hub)
+            .setColor(COLOR_HUB_NAVY)
             .setContentTitle("HUB News · Thông báo đang hoạt động")
             .setContentText("Bạn sẽ nhận được tin tức mới nhất từ 7 cổng HUB ngay khi trường đăng bài.")
             .setStyle(
