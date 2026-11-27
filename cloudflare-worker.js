@@ -174,6 +174,19 @@ const BOT_COMMANDS = [
   { command: "help",    description: "Hướng dẫn nhanh" },
 ];
 
+const GROUP_BOT_COMMANDS = [
+  ...BOT_COMMANDS.filter((c) => c.command !== "clear"),
+  { command: "settopic", description: "Ghim chủ đề (Topic) nhận tin nhóm" },
+];
+
+const KNOWN_COMMANDS = new Set([
+  "/start", "/menu", "/latest", "/online", "/update", "/full7d", "/full30d",
+  "/find", "/thi", "/daotao", "/scc", "/hocphi", "/hocbong", "/digest",
+  "/portals", "/links", "/status", "/notify", "/bat", "/tat", "/settopic",
+  "/clear", "/author", "/about", "/help", "/admin", "/broadcast", "/bc",
+  "/bc!", "/bcg", "/tb", "/testpush",
+]);
+
 const QUICK_SEARCH_CHIPS = [
   { label: "📝 lịch thi",    kw: "lich thi" },
   { label: "🏆 học bổng",    kw: "hoc bong" },
@@ -1094,6 +1107,7 @@ async function sendMsg(env, chatId, text, replyMarkup = null, extra = {}) {
     },
     extra
   );
+  if (!payload.message_thread_id) delete payload.message_thread_id;
   if (replyMarkup) payload.reply_markup = replyMarkup;
   return await tgApi(env, "sendMessage", payload);
 }
@@ -1122,15 +1136,67 @@ async function answerCb(env, callbackQueryId, text = "", showAlert = false) {
   });
 }
 
-async function sendPhotoMsg(env, chatId, photoFileId, caption, replyMarkup = null) {
-  const payload = {
-    chat_id: chatId,
-    photo: photoFileId,
-    caption: String(caption || "").slice(0, 1020),
-    parse_mode: "HTML",
-  };
+async function sendPhotoMsg(env, chatId, photoFileId, caption, replyMarkup = null, extra = {}) {
+  const payload = Object.assign(
+    {
+      chat_id: chatId,
+      photo: photoFileId,
+      caption: String(caption || "").slice(0, 1020),
+      parse_mode: "HTML",
+    },
+    extra
+  );
+  if (!payload.message_thread_id) delete payload.message_thread_id;
   if (replyMarkup) payload.reply_markup = replyMarkup;
   return await tgApi(env, "sendPhoto", payload);
+}
+
+function isGroupChat(chat) {
+  return Boolean(chat && (chat.type === "group" || chat.type === "supergroup"));
+}
+
+function isGroupRecord(u) {
+  return Boolean(u && (u.type === "group" || u.type === "supergroup"));
+}
+
+async function getBotMeta(env, refresh = false) {
+  if (!refresh) {
+    const edge = await getEdgeCache("bot_meta_v1");
+    if (edge && edge.username) return edge;
+    if (env && env.SUBSCRIBERS_KV) {
+      const stored = await env.SUBSCRIBERS_KV.get("cfg:bot_meta", { type: "json" }).catch(() => null);
+      if (stored && stored.username) {
+        await putEdgeCache("bot_meta_v1", stored, 300);
+        return stored;
+      }
+    }
+  }
+  if (!env || !env.BOT_TOKEN) return { id: "", username: "" };
+  const me = await tgApi(env, "getMe", {});
+  if (me && me.ok && me.result) {
+    const meta = {
+      id: String(me.result.id || ""),
+      username: String(me.result.username || ""),
+      canJoinGroups: Boolean(me.result.can_join_groups),
+      canReadAllGroupMessages: Boolean(me.result.can_read_all_group_messages),
+    };
+    await putEdgeCache("bot_meta_v1", meta, 300);
+    if (env.SUBSCRIBERS_KV) {
+      await env.SUBSCRIBERS_KV.put("cfg:bot_meta", JSON.stringify(meta)).catch(() => {});
+    }
+    return meta;
+  }
+  return { id: "", username: "" };
+}
+
+async function canManageGroup(env, chat, userId) {
+  if (!isGroupChat(chat)) return true;
+  if (!userId) return false;
+  if (await isAdminUser(env, userId)) return true;
+  if (chat.all_members_are_administrators) return true;
+  const r = await tgApi(env, "getChatMember", { chat_id: chat.id, user_id: userId });
+  const st = r && r.ok && r.result && r.result.status;
+  return st === "creator" || st === "administrator";
 }
 
 // ---------------------------------------------------------------- Subscribers & Admin (Cloudflare KV)
@@ -1180,12 +1246,18 @@ async function trackSubscriber(env, chat, fromUser = null, forceActivate = false
   const id = String(chat.id);
   const key = `u:${id}`;
   const nowIso = new Date().toISOString();
-  const fullName =
-    [chat.first_name || (fromUser && fromUser.first_name), chat.last_name || (fromUser && fromUser.last_name)]
-      .filter(Boolean)
-      .join(" ")
-      .trim() || chat.title || `User ${id}`;
-  const username = chat.username || (fromUser && fromUser.username) || "";
+  const group = isGroupChat(chat);
+  const fullName = group
+    ? (String(chat.title || "").trim() || `Nhóm ${id}`)
+    : (
+        [chat.first_name || (fromUser && fromUser.first_name), chat.last_name || (fromUser && fromUser.last_name)]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || chat.title || `User ${id}`
+      );
+  const username = group
+    ? (chat.username || "")
+    : (chat.username || (fromUser && fromUser.username) || "");
 
   try {
     const existing = await env.SUBSCRIBERS_KV.get(key, { type: "json" });
@@ -1196,6 +1268,7 @@ async function trackSubscriber(env, chat, fromUser = null, forceActivate = false
         existing.blocked ||
         existing.name !== fullName ||
         existing.username !== username ||
+        (chat.type && existing.type !== chat.type) ||
         ageMs > 6 * 3600 * 1000;
       if (!needsUpdate) return existing;
       const updated = {
@@ -1218,6 +1291,7 @@ async function trackSubscriber(env, chat, fromUser = null, forceActivate = false
       username,
       subscribed: true,
       blocked: false,
+      threadId: null,
       joinedAt: nowIso,
       lastSeen: nowIso,
     };
@@ -1226,6 +1300,62 @@ async function trackSubscriber(env, chat, fromUser = null, forceActivate = false
     return created;
   } catch (e) {
     log("trackSubscriber error", e);
+    return null;
+  }
+}
+
+async function migrateSubscriberChat(env, oldChatId, newChatId, title = "") {
+  if (!env || !env.SUBSCRIBERS_KV || !oldChatId || !newChatId) return null;
+  const oldKey = `u:${oldChatId}`;
+  const newKey = `u:${newChatId}`;
+  try {
+    const existing = await env.SUBSCRIBERS_KV.get(oldKey, { type: "json" }).catch(() => null);
+    const nowIso = new Date().toISOString();
+    const migrated = {
+      ...(existing || {}),
+      id: String(newChatId),
+      type: "supergroup",
+      name: String(title || (existing && existing.name) || `Nhóm ${newChatId}`).trim(),
+      subscribed: existing ? existing.subscribed !== false : true,
+      blocked: false,
+      joinedAt: (existing && existing.joinedAt) || nowIso,
+      lastSeen: nowIso,
+    };
+    await env.SUBSCRIBERS_KV.put(newKey, JSON.stringify(migrated));
+    if (String(oldChatId) !== String(newChatId)) {
+      await env.SUBSCRIBERS_KV.delete(oldKey).catch(() => {});
+    }
+    await deleteEdgeCache("subscribers_list_v1");
+    return migrated;
+  } catch (e) {
+    log("migrateSubscriberChat error", e);
+    return null;
+  }
+}
+
+async function setGroupTopic(env, chatId, threadId) {
+  if (!env || !env.SUBSCRIBERS_KV || !chatId) return null;
+  const key = `u:${chatId}`;
+  try {
+    const existing = (await env.SUBSCRIBERS_KV.get(key, { type: "json" }).catch(() => null)) || {
+      id: String(chatId),
+      type: "supergroup",
+      name: `Nhóm ${chatId}`,
+      username: "",
+      subscribed: true,
+      blocked: false,
+      joinedAt: new Date().toISOString(),
+    };
+    const updated = {
+      ...existing,
+      threadId: threadId ? Number(threadId) : null,
+      lastSeen: new Date().toISOString(),
+    };
+    await env.SUBSCRIBERS_KV.put(key, JSON.stringify(updated));
+    await deleteEdgeCache("subscribers_list_v1");
+    return updated;
+  } catch (e) {
+    log("setGroupTopic error", e);
     return null;
   }
 }
@@ -1299,9 +1429,51 @@ function formatBroadcastPayload(bodyText, urgent = false) {
   ].join("\n");
 }
 
+async function deliverToTarget(env, target, text, markup = null, photoFileId = "") {
+  const extra = target.threadId ? { message_thread_id: target.threadId } : {};
+  let r = photoFileId
+    ? await sendPhotoMsg(env, target.id, photoFileId, text, markup, extra)
+    : await sendMsg(env, target.id, text, markup, extra);
+  if (r && r.ok) return { status: "sent", res: r };
+
+  const desc = String((r && r.description) || "").toLowerCase();
+  const migrateId = r && r.parameters && r.parameters.migrate_to_chat_id;
+  if (migrateId) {
+    await migrateSubscriberChat(env, target.id, migrateId, target.name || "");
+    const rMig = photoFileId
+      ? await sendPhotoMsg(env, String(migrateId), photoFileId, text, markup)
+      : await sendMsg(env, String(migrateId), text, markup);
+    return rMig && rMig.ok ? { status: "sent", res: rMig } : { status: "failed", res: rMig };
+  }
+
+  if (target.threadId && (desc.includes("thread not found") || desc.includes("topic_closed") || desc.includes("topic closed"))) {
+    await setGroupTopic(env, target.id, null);
+    const rFallback = photoFileId
+      ? await sendPhotoMsg(env, target.id, photoFileId, text, markup)
+      : await sendMsg(env, target.id, text, markup);
+    if (rFallback && rFallback.ok) return { status: "sent", res: rFallback };
+  }
+
+  if (
+    desc.includes("blocked") ||
+    desc.includes("deactivated") ||
+    desc.includes("chat not found") ||
+    desc.includes("kicked") ||
+    desc.includes("not a member") ||
+    desc.includes("upgraded to a supergroup")
+  ) {
+    await setUserSubscription(env, target.id, false, true);
+    return { status: "blocked", res: r };
+  }
+  return { status: "failed", res: r };
+}
+
 async function executeBroadcast(env, draft) {
   const users = await listAllSubscribers(env);
-  const targets = users.filter((u) => u.subscribed !== false && !u.blocked);
+  const onlyGroups = Boolean(draft && draft.groupsOnly);
+  const targets = users.filter(
+    (u) => u.subscribed !== false && !u.blocked && (!onlyGroups || isGroupRecord(u))
+  );
   const formatted = formatBroadcastPayload(draft.text || "", Boolean(draft.urgent));
   const markup = {
     inline_keyboard: [[
@@ -1318,20 +1490,10 @@ async function executeBroadcast(env, draft) {
     const batch = targets.slice(i, i + 20);
     await Promise.all(
       batch.map(async (u) => {
-        const r = draft.photoFileId
-          ? await sendPhotoMsg(env, u.id, draft.photoFileId, formatted, markup)
-          : await sendMsg(env, u.id, formatted, markup);
-        if (r && r.ok) {
-          sent += 1;
-        } else {
-          const desc = String((r && r.description) || "").toLowerCase();
-          if (desc.includes("blocked") || desc.includes("deactivated") || desc.includes("chat not found") || desc.includes("kicked")) {
-            blocked += 1;
-            await setUserSubscription(env, u.id, false, true);
-          } else {
-            failed += 1;
-          }
-        }
+        const res = await deliverToTarget(env, u, formatted, markup, draft.photoFileId || "");
+        if (res.status === "sent") sent += 1;
+        else if (res.status === "blocked") blocked += 1;
+        else failed += 1;
       })
     );
   }
@@ -1340,7 +1502,11 @@ async function executeBroadcast(env, draft) {
 
 async function adminHomeView(env, adminId) {
   const users = await listAllSubscribers(env, true);
-  const active = users.filter((u) => u.subscribed !== false && !u.blocked).length;
+  const groups = users.filter((u) => isGroupRecord(u));
+  const privates = users.filter((u) => !isGroupRecord(u));
+  const activeGroups = groups.filter((u) => u.subscribed !== false && !u.blocked).length;
+  const activePrivates = privates.filter((u) => u.subscribed !== false && !u.blocked).length;
+  const active = activeGroups + activePrivates;
   const muted = users.length - active;
   const lastScan = env.SUBSCRIBERS_KV
     ? await env.SUBSCRIBERS_KV.get("state:last_scan", { type: "json" }).catch(() => null)
@@ -1354,13 +1520,14 @@ async function adminHomeView(env, adminId) {
     `<b>Quản trị · ${BOT_BRAND}</b>`,
     LINE,
     `👤 ${AUTHOR_NAME} · <code>${escapeHtml(adminId)}</code>`,
-    `👥 Người dùng: <b>${users.length}</b> (🔔 ${active} · 🔕 ${muted})`,
+    `👥 Tổng: <b>${users.length}</b> (👤 ${privates.length} cá nhân · 👥 ${groups.length} nhóm)`,
+    `🔔 Nhận tin: <b>${active}</b> (👤 ${activePrivates} · 👥 ${activeGroups}) · 🔕 ${muted}`,
     scanLine,
   ];
   if (lastScan && Array.isArray(lastScan.failed) && lastScan.failed.length) {
     textLines.push(`⚠️ Chậm/Lỗi: <code>${escapeHtml(lastScan.failed.slice(0, 3).join(", "))}</code>`);
   }
-  textLines.push("", "Lệnh nhanh: <code>/bc nội dung</code> · <code>/bc! gửi ngay</code>");
+  textLines.push("", "Lệnh nhanh: <code>/bc nội dung</code> · <code>/bc! gửi ngay</code> · <code>/bcg chỉ nhóm</code>");
   const text = textLines.join("\n");
 
   const markup = {
@@ -1371,13 +1538,14 @@ async function adminHomeView(env, adminId) {
         { text: "🔄 Quét ngay", callback_data: "adm:scan_now" },
       ],
       [
-        { text: `👥 Người dùng (${users.length})`, callback_data: "adm:users:1" },
-        { text: "🧪 Test Admin", callback_data: "adm:test_self" },
+        { text: `👥 Nhóm (${groups.length})`, callback_data: "adm:users:grp:1" },
+        { text: `👤 Tất cả (${users.length})`, callback_data: "adm:users:all:1" },
       ],
       [
+        { text: "🧪 Test Admin", callback_data: "adm:test_self" },
         { text: "🔄 Làm mới", callback_data: "adm:home" },
-        { text: "⬅️ Menu", callback_data: "m:home" },
       ],
+      [{ text: "⬅️ Menu", callback_data: "m:home" }],
     ],
   };
   return { text, markup };
@@ -1567,11 +1735,17 @@ async function runAutoMonitorCron(env, forceRecordScan = false) {
   if (toNotify.length > 0) {
     const users = await listAllSubscribers(env);
     const adminIds = await getAdminIds(env);
-    const targetSet = new Set(
-      users.filter((u) => u.subscribed !== false && !u.blocked).map((u) => String(u.id))
-    );
-    adminIds.forEach((id) => targetSet.add(String(id)));
-    const targets = Array.from(targetSet);
+    const targetMap = new Map();
+    for (const u of users) {
+      if (u.subscribed !== false && !u.blocked) {
+        targetMap.set(String(u.id), u);
+      }
+    }
+    for (const id of adminIds) {
+      const sid = String(id);
+      if (!targetMap.has(sid)) targetMap.set(sid, { id: sid, type: "private", threadId: null });
+    }
+    const targets = Array.from(targetMap.values());
 
     for (const entry of toNotify.reverse().slice(0, 5)) {
       const it = entry.item;
@@ -1585,16 +1759,9 @@ async function runAutoMonitorCron(env, forceRecordScan = false) {
       for (let i = 0; i < targets.length; i += 20) {
         const chunk = targets.slice(i, i + 20);
         await Promise.all(
-          chunk.map(async (cid) => {
-            const r = await sendMsg(env, cid, card.text, card.markup);
-            if (r && r.ok) {
-              sentThis += 1;
-            } else {
-              const desc = String((r && r.description) || "").toLowerCase();
-              if (desc.includes("blocked") || desc.includes("deactivated") || desc.includes("kicked")) {
-                await setUserSubscription(env, cid, false, true);
-              }
-            }
+          chunk.map(async (target) => {
+            const res = await deliverToTarget(env, target, card.text, card.markup);
+            if (res.status === "sent") sentThis += 1;
           })
         );
       }
@@ -1648,58 +1815,84 @@ async function runAutoMonitorCron(env, forceRecordScan = false) {
   return { ok: true, ms: scanMs, okCount, totalSources: SOURCES.length, onlineOk, pushedNotices, totalDelivered, failed };
 }
 
-async function adminUsersView(env, page = 1) {
-  const users = await listAllSubscribers(env);
+async function adminUsersView(env, page = 1, filter = "all") {
+  const allUsers = await listAllSubscribers(env);
+  const users =
+    filter === "grp" ? allUsers.filter((u) => isGroupRecord(u))
+    : filter === "priv" ? allUsers.filter((u) => !isGroupRecord(u))
+    : allUsers;
   const perPage = 10;
   const totalPages = Math.max(1, Math.ceil(users.length / perPage));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const slice = users.slice((safePage - 1) * perPage, safePage * perPage);
 
+  const heading =
+    filter === "grp" ? "Nhóm lớp Telegram"
+    : filter === "priv" ? "Người dùng cá nhân"
+    : "Người dùng & Nhóm";
+
   const lines = [
-    "<b>Người dùng Bot</b>",
-    `Trang ${safePage}/${totalPages} · ${users.length} tài khoản`,
+    `<b>${heading}</b>`,
+    `Trang ${safePage}/${totalPages} · ${users.length} mục tiêu`,
     LINE,
   ];
 
   if (!slice.length) {
-    lines.push("\nChưa có người dùng.");
+    lines.push("\nChưa có dữ liệu.");
   } else {
     slice.forEach((u, idx) => {
       const n = (safePage - 1) * perPage + idx + 1;
       const st = u.blocked ? "🚫" : (u.subscribed === false ? "🔕" : "🔔");
+      const kind = isGroupRecord(u) ? "👥 " : "👤 ";
       const uname = u.username ? ` @${escapeHtml(u.username)}` : "";
+      const topic = u.threadId ? ` · #${u.threadId}` : "";
       const joined = u.joinedAt ? String(u.joinedAt).slice(0, 10) : "—";
-      lines.push(`<b>${n}.</b> ${st} <b>${escapeHtml(u.name)}</b>${uname}`);
-      lines.push(`   <code>${escapeHtml(u.id)}</code> · ${joined}`);
+      lines.push(`<b>${n}.</b> ${st} ${kind}<b>${escapeHtml(u.name)}</b>${uname}`);
+      lines.push(`   <code>${escapeHtml(u.id)}</code>${topic} · ${joined}`);
     });
   }
 
   const kb = [];
+  kb.push([
+    { text: filter === "all" ? "● Tất cả" : "Tất cả", callback_data: "adm:users:all:1" },
+    { text: filter === "grp" ? "● Nhóm" : "Nhóm", callback_data: "adm:users:grp:1" },
+    { text: filter === "priv" ? "● Cá nhân" : "Cá nhân", callback_data: "adm:users:priv:1" },
+  ]);
   if (totalPages > 1) {
     const nav = [];
-    if (safePage > 1) nav.push({ text: "‹ Trước", callback_data: `adm:users:${safePage - 1}` });
+    if (safePage > 1) nav.push({ text: "‹ Trước", callback_data: `adm:users:${filter}:${safePage - 1}` });
     nav.push({ text: `${safePage}/${totalPages}`, callback_data: "noop" });
-    if (safePage < totalPages) nav.push({ text: "Sau ›", callback_data: `adm:users:${safePage + 1}` });
+    if (safePage < totalPages) nav.push({ text: "Sau ›", callback_data: `adm:users:${filter}:${safePage + 1}` });
     kb.push(nav);
   }
   kb.push([
-    { text: "🔄 Làm mới", callback_data: `adm:users:${safePage}` },
+    { text: "🔄 Làm mới", callback_data: `adm:users:${filter}:${safePage}` },
     { text: "⬅️ Admin", callback_data: "adm:home" },
   ]);
   return { text: lines.join("\n"), markup: { inline_keyboard: kb } };
 }
 
-async function userNotifyView(env, chatId) {
+async function userNotifyView(env, chatId, isGroup = false) {
   let sub = true;
+  let threadId = null;
   if (env && env.SUBSCRIBERS_KV) {
     const u = await env.SUBSCRIBERS_KV.get(`u:${chatId}`, { type: "json" }).catch(() => null);
     if (u && u.subscribed === false) sub = false;
+    if (u && u.threadId) threadId = u.threadId;
   }
-  const text = [
-    "<b>Thông báo tự động</b>",
+  const lines = [
+    isGroup ? "<b>Thông báo tự động của nhóm</b>" : "<b>Thông báo tự động</b>",
     LINE,
     `Trạng thái: ${sub ? "🟢 <b>Đang bật</b>" : "🔕 <b>Đang tắt</b>"}`,
-  ].join("\n");
+  ];
+  if (isGroup) {
+    lines.push(
+      threadId
+        ? `Chủ đề nhận tin: <code>#${threadId}</code> (gõ <code>/settopic off</code> để gỡ)`
+        : "Kênh nhận tin: Kênh chính (dùng <code>/settopic</code> trong Topic để ghim)"
+    );
+    lines.push("Chỉ Quản trị viên nhóm mới thay đổi được cài đặt này.");
+  }
 
   const markup = {
     inline_keyboard: [
@@ -1711,7 +1904,7 @@ async function userNotifyView(env, chatId) {
       [{ text: "⬅️ Menu", callback_data: "m:home" }],
     ],
   };
-  return { text, markup };
+  return { text: lines.join("\n"), markup };
 }
 
 async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
@@ -1745,7 +1938,9 @@ async function clearChatHistory(env, chatId, upToMsgId, count = 100) {
 
 // ---------------------------------------------------------------- Minimalist Views & Keyboards
 
-function mainMenuView() {
+function mainMenuView(opts = {}) {
+  const isGroup = Boolean(opts && opts.isGroup);
+  const botUsername = String((opts && opts.botUsername) || "").trim();
   const text = [
     `<b>${BOT_BRAND}</b>`,
     LINE,
@@ -1753,36 +1948,46 @@ function mainMenuView() {
     `Tác giả: <a href="${AUTHOR_FB_URL}">${AUTHOR_NAME}</a>`,
   ].join("\n");
 
-  const markup = {
-    inline_keyboard: [
-      [{ text: "🔥 Tất cả cổng · Mới nhất", callback_data: "list:all:latest:1" }],
-      [
-        { text: "🏛️ Online HUB (#1)", callback_data: "src:online:1" },
-        { text: "🏢 Các Cổng HUB", callback_data: "m:portals" },
-      ],
-      [
-        { text: "📅 7 ngày", callback_data: "list:all:7:1" },
-        { text: "🗓️ 30 ngày", callback_data: "list:all:30:1" },
-      ],
-      [
-        { text: "🏷️ Chủ đề", callback_data: "m:topics" },
-        { text: "🔎 Tìm kiếm", callback_data: "m:search" },
-      ],
-      [
-        { text: "📰 Tổng hợp", callback_data: "digest:7" },
-        { text: "🔗 Tiện ích", callback_data: "m:links" },
-      ],
-      [
-        { text: "📊 Trạng thái", callback_data: "status" },
-        { text: "👤 Tác giả", callback_data: "m:author" },
-      ],
-      [
-        { text: "❓ Trợ giúp", callback_data: "m:help" },
-        { text: "🧹 Dọn chat", callback_data: "clear:ask" },
-      ],
+  const keyboard = [
+    [{ text: "🔥 Tất cả cổng · Mới nhất", callback_data: "list:all:latest:1" }],
+    [
+      { text: "🏛️ Online HUB (#1)", callback_data: "src:online:1" },
+      { text: "🏢 Các Cổng HUB", callback_data: "m:portals" },
     ],
-  };
-  return { text, markup };
+    [
+      { text: "📅 7 ngày", callback_data: "list:all:7:1" },
+      { text: "🗓️ 30 ngày", callback_data: "list:all:30:1" },
+    ],
+    [
+      { text: "🏷️ Chủ đề", callback_data: "m:topics" },
+      { text: "🔎 Tìm kiếm", callback_data: "m:search" },
+    ],
+    [
+      { text: "📰 Tổng hợp", callback_data: "digest:7" },
+      { text: "🔗 Tiện ích", callback_data: "m:links" },
+    ],
+    [
+      { text: "📊 Trạng thái", callback_data: "status" },
+      { text: "👤 Tác giả", callback_data: "m:author" },
+    ],
+    isGroup
+      ? [
+          { text: "❓ Trợ giúp", callback_data: "m:help" },
+          { text: "🔔 Thông báo", callback_data: "user:notify_view" },
+        ]
+      : [
+          { text: "❓ Trợ giúp", callback_data: "m:help" },
+          { text: "🧹 Dọn chat", callback_data: "clear:ask" },
+        ],
+  ];
+
+  if (!isGroup && botUsername) {
+    keyboard.push([
+      { text: "➕ Thêm vào nhóm lớp", url: `https://t.me/${botUsername}?startgroup=hubnews` },
+    ]);
+  }
+
+  return { text, markup: { inline_keyboard: keyboard } };
 }
 
 function authorView() {
@@ -1919,31 +2124,35 @@ function quickLinksView() {
   return { text, markup };
 }
 
-function helpView() {
+function helpView(opts = {}) {
+  const isGroup = Boolean(opts && opts.isGroup);
+  const botUsername = String((opts && opts.botUsername) || "").trim();
   const text = [
     "<b>Hướng dẫn nhanh</b>",
     LINE,
     "• Tự động gửi tin mới từ 7 cổng HUB mỗi 5 phút",
-    "• Nhắn trực tiếp từ khoá không dấu để tìm kiếm",
+    "• Nhắn trực tiếp từ khoá không dấu để tìm kiếm (hoặc <code>/find từ khoá</code>)",
     "• Bấm số <b>1–5</b> dưới danh sách để đọc nhanh &amp; tải PDF",
+    "• Nhóm lớp: mời BOT vào nhóm để tự nhận tin · Quản trị dùng <code>/notify</code>, <code>/bat</code>, <code>/tat</code>, <code>/settopic</code>",
     "",
     "<b>Lệnh nhanh</b>",
     "<code>/latest</code> · Tin mới toàn HUB",
     "<code>/online</code> · Online HUB (Portal)",
     "<code>/full7d</code> · <code>/full30d</code> · Theo thời gian",
     "<code>/thi</code> · <code>/daotao</code> · <code>/scc</code> · <code>/hocphi</code> · <code>/hocbong</code>",
-    "<code>/digest</code> · <code>/status</code> · <code>/notify</code> · <code>/clear</code>",
+    "<code>/digest</code> · <code>/status</code> · <code>/notify</code>" + (isGroup ? " · <code>/settopic</code>" : " · <code>/clear</code>"),
   ].join("\n");
 
-  const markup = {
-    inline_keyboard: [
-      [
-        { text: "🔥 Tất cả cổng", callback_data: "list:all:latest:1" },
-        { text: "⬅️ Menu", callback_data: "m:home" },
-      ],
+  const kb = [
+    [
+      { text: "🔥 Tất cả cổng", callback_data: "list:all:latest:1" },
+      { text: "⬅️ Menu", callback_data: "m:home" },
     ],
-  };
-  return { text, markup };
+  ];
+  if (!isGroup && botUsername) {
+    kb.unshift([{ text: "➕ Thêm vào nhóm lớp", url: `https://t.me/${botUsername}?startgroup=hubnews` }]);
+  }
+  return { text, markup: { inline_keyboard: kb } };
 }
 
 function buildPaginatedListView(title, items, page, baseCbPrefix, extra = {}) {
@@ -2177,18 +2386,18 @@ function buildStatusView(data) {
 
 // ---------------------------------------------------------------- Action Router
 
-async function renderRoute(routeStr, bypassCache = false, env = null, ctx = null) {
+async function renderRoute(routeStr, bypassCache = false, env = null, ctx = null, viewOpts = {}) {
   if (routeStr.startsWith("rf:")) {
-    return await renderRoute(routeStr.slice(3), true, env, ctx);
+    return await renderRoute(routeStr.slice(3), true, env, ctx, viewOpts);
   }
 
-  if (routeStr === "m:home") return mainMenuView();
+  if (routeStr === "m:home") return mainMenuView(viewOpts);
   if (routeStr === "m:portals") return portalsMenuView();
   if (routeStr === "m:topics") return topicsMenuView();
   if (routeStr === "m:search") return searchMenuView();
   if (routeStr === "m:links") return quickLinksView();
   if (routeStr === "m:author") return authorView();
-  if (routeStr === "m:help") return helpView();
+  if (routeStr === "m:help") return helpView(viewOpts);
 
   if (routeStr === "status") {
     const data = await fetchAllSources(1, true, env, ctx);
@@ -2223,7 +2432,7 @@ async function renderRoute(routeStr, bypassCache = false, env = null, ctx = null
     const skey = parts[1];
     const page = parseInt(parts[2], 10) || 1;
     const src = SOURCE_BY_KEY[skey];
-    if (!src) return mainMenuView();
+    if (!src) return mainMenuView(viewOpts);
 
     // Tối ưu tốc độ Online HUB: trang 1–2 chỉ tải 1 trang (10 tin, nhanh gấp 3–5 lần), trang 3+ mới mở rộng
     const onlinePagesNeeded = skey === "online" ? (page <= 2 ? 1 : 3) : 1;
@@ -2282,40 +2491,106 @@ async function renderRoute(routeStr, bypassCache = false, env = null, ctx = null
     return buildDetailView(detail, backCb);
   }
 
-  return mainMenuView();
+  return mainMenuView(viewOpts);
 }
 
 // ---------------------------------------------------------------- Update Processors
 
+async function handleMyChatMember(mcm, env) {
+  const chat = mcm && mcm.chat;
+  if (!chat || !isGroupChat(chat)) return;
+
+  const oldSt = (mcm.old_chat_member && mcm.old_chat_member.status) || "";
+  const newSt = (mcm.new_chat_member && mcm.new_chat_member.status) || "";
+  const joined = (newSt === "member" || newSt === "administrator") && (oldSt === "left" || oldSt === "kicked" || !oldSt);
+  const removed = newSt === "left" || newSt === "kicked";
+
+  if (joined) {
+    await trackSubscriber(env, chat, mcm.from, true);
+    const meta = await getBotMeta(env);
+    const mentionTip = meta && meta.username ? ` (hoặc <code>/latest@${escapeHtml(meta.username)}</code>)` : "";
+    const welcome = [
+      `<b>${BOT_BRAND} · Đã tham gia nhóm</b>`,
+      LINE,
+      "🟢 Tự động báo tin mới từ 7 cổng HUB mỗi 5 phút",
+      `• Lệnh nhanh: <code>/menu</code> · <code>/latest</code> · <code>/online</code> · <code>/find</code>${mentionTip}`,
+      "• Quản trị nhóm dùng <code>/notify</code>, <code>/bat</code>, <code>/tat</code> để bật/tắt tin tự động",
+      "• Nhóm bật Chủ đề (Topics): gõ <code>/settopic</code> trong chủ đề muốn nhận tin",
+    ].join("\n");
+    await sendMsg(env, chat.id, welcome, {
+      inline_keyboard: [
+        [{ text: "🔥 Tất cả cổng · Mới nhất", callback_data: "list:all:latest:1" }],
+        [
+          { text: "🏛️ Online HUB (#1)", callback_data: "src:online:1" },
+          { text: "📌 Mở Menu", callback_data: "m:home" },
+        ],
+      ],
+    });
+    return;
+  }
+
+  if (removed) {
+    await setUserSubscription(env, chat.id, false, true);
+  }
+}
+
 async function handleMessage(msg, env, ctx = null) {
   const chatId = msg.chat && msg.chat.id;
+  if (!chatId) return;
+
+  // Chuyển đổi tự động khi nhóm thường nâng cấp lên Supergroup
+  if (msg.migrate_to_chat_id) {
+    await migrateSubscriberChat(env, chatId, msg.migrate_to_chat_id, msg.chat.title || "");
+    return;
+  }
+
   const fromId = (msg.from && msg.from.id) || chatId;
   const text = (msg.text || msg.caption || "").trim();
   const photoFileId = msg.photo && msg.photo.length ? msg.photo[msg.photo.length - 1].file_id : "";
-  if (!chatId || (!text && !photoFileId)) return;
+  if (!text && !photoFileId) return;
 
   const isPrivate = msg.chat.type === "private";
+  const isGroup = isGroupChat(msg.chat);
+  const threadExtra = isGroup && msg.message_thread_id ? { message_thread_id: msg.message_thread_id } : {};
+
   const isCommand = text.startsWith("/");
-  const cmd = isCommand ? text.split(/\s+/)[0].split("@")[0].toLowerCase() : "";
-  const arg = isCommand ? text.slice(text.split(/\s+/)[0].length).trim() : text;
+  const rawToken = isCommand ? text.split(/\s+/)[0] : "";
+  const atIdx = rawToken.indexOf("@");
+  const cmd = isCommand ? (atIdx >= 0 ? rawToken.slice(0, atIdx) : rawToken).toLowerCase() : "";
+  const targetBot = atIdx >= 0 ? rawToken.slice(atIdx + 1).toLowerCase() : "";
+  const arg = isCommand ? text.slice(rawToken.length).trim() : text;
 
-  await trackSubscriber(env, msg.chat, msg.from, cmd === "/start");
-
-  // 1) Admin ForceReply broadcast draft
   const replyText = (msg.reply_to_message && msg.reply_to_message.text) || "";
-  const isReplyBroadcast = replyText.includes("Soạn thông báo phát sóng");
+  const isReplyBroadcast = isPrivate && replyText.includes("Soạn thông báo phát sóng");
+  const isReplyToSearch = Boolean(replyText && replyText.includes("Nhập từ khoá"));
+
+  // Bỏ qua tin nhắn thường trong nhóm và bỏ qua lệnh dành cho BOT khác
+  if (!isCommand && !isPrivate && !isReplyToSearch) return;
+  if (isCommand && isGroup && !KNOWN_COMMANDS.has(cmd)) return;
+
+  const botMeta = await getBotMeta(env);
+  if (isCommand && isGroup && targetBot && botMeta.username && targetBot !== botMeta.username.toLowerCase()) {
+    return;
+  }
+
+  const viewOpts = { isGroup, botUsername: botMeta.username || "" };
+  await trackSubscriber(env, msg.chat, msg.from, cmd === "/start" && isPrivate);
+
+  // 1) Admin ForceReply broadcast draft (private only)
   if (isReplyBroadcast && (await isAdminUser(env, fromId))) {
     const urgent = replyText.includes("KHẨN");
-    const draft = { text, photoFileId, urgent, createdAt: Date.now() };
+    const draft = { text, photoFileId, urgent, groupsOnly: false, createdAt: Date.now() };
     if (env.SUBSCRIBERS_KV) {
       await env.SUBSCRIBERS_KV.put(`draft:${fromId}`, JSON.stringify(draft), { expirationTtl: 900 });
     }
     const users = await listAllSubscribers(env);
-    const activeCount = users.filter((u) => u.subscribed !== false && !u.blocked).length;
+    const activeUsers = users.filter((u) => u.subscribed !== false && !u.blocked);
+    const activeGrps = activeUsers.filter((u) => isGroupRecord(u)).length;
+    const activePrivs = activeUsers.length - activeGrps;
     const preview = formatBroadcastPayload(text, urgent);
     const confirmKb = {
       inline_keyboard: [
-        [{ text: `✅ Gửi ngay (${activeCount} người)`, callback_data: "adm:bc_send" }],
+        [{ text: `✅ Gửi ngay (${activeUsers.length} mục tiêu)`, callback_data: "adm:bc_send" }],
         [
           { text: "🧪 Thử riêng", callback_data: "adm:bc_preview" },
           { text: "❌ Huỷ", callback_data: "adm:bc_cancel" },
@@ -2325,15 +2600,26 @@ async function handleMessage(msg, env, ctx = null) {
     if (photoFileId) {
       await sendPhotoMsg(env, chatId, photoFileId, preview, confirmKb);
     } else {
-      await sendMsg(env, chatId, `<b>Xem trước (${activeCount} người nhận)</b>\n\n` + preview, confirmKb);
+      await sendMsg(
+        env,
+        chatId,
+        `<b>Xem trước (👤 ${activePrivs} · 👥 ${activeGrps} nhóm)</b>\n\n` + preview,
+        confirmKb
+      );
     }
     return;
   }
 
-  const isReplyToSearch = Boolean(replyText && replyText.includes("Nhập từ khoá"));
-  if (!isCommand && !isPrivate && !isReplyToSearch) return;
+  // 2) Admin commands (chỉ dùng trong chat riêng để bảo mật thông tin quản trị)
+  if (cmd === "/admin" || cmd === "/broadcast" || cmd === "/bc" || cmd === "/tb" || cmd === "/bc!" || cmd === "/bcg" || cmd === "/testpush") {
+    if (!isPrivate) {
+      if (await isAdminUser(env, fromId)) {
+        await sendMsg(env, chatId, "🔒 Lệnh quản trị chỉ dùng trong tin nhắn riêng với BOT.", null, threadExtra);
+      }
+      return;
+    }
+  }
 
-  // 2) Admin commands
   if (cmd === "/admin") {
     if (arg && !(await isAdminUser(env, fromId))) {
       const claim = await claimAdminWithPin(env, fromId, arg);
@@ -2354,7 +2640,7 @@ async function handleMessage(msg, env, ctx = null) {
     return;
   }
 
-  if (cmd === "/broadcast" || cmd === "/bc" || cmd === "/tb" || cmd === "/bc!") {
+  if (cmd === "/broadcast" || cmd === "/bc" || cmd === "/tb" || cmd === "/bc!" || cmd === "/bcg") {
     if (!(await isAdminUser(env, fromId))) {
       await sendMsg(env, chatId, "⛔ Chỉ Admin có quyền phát thông báo.");
       return;
@@ -2364,13 +2650,15 @@ async function handleMessage(msg, env, ctx = null) {
         env,
         chatId,
         "<b>Phát thông báo</b>\n" + LINE + "\n" +
-        "• <code>/bc nội dung</code> — Xem trước rồi gửi\n" +
-        "• <code>/bc! nội dung</code> — Gửi trực tiếp ngay\n" +
+        "• <code>/bc nội dung</code> — Xem trước rồi gửi tất cả\n" +
+        "• <code>/bc! nội dung</code> — Gửi trực tiếp ngay tất cả\n" +
+        "• <code>/bcg nội dung</code> — Chỉ gửi tới các nhóm lớp\n" +
         "• Gửi ảnh kèm chú thích <code>/bc ...</code>"
       );
       return;
     }
-    const draft = { text: arg, photoFileId, urgent: false, createdAt: Date.now() };
+    const groupsOnly = cmd === "/bcg";
+    const draft = { text: arg, photoFileId, urgent: false, groupsOnly, createdAt: Date.now() };
     if (cmd === "/bc!") {
       const waitMsg = await sendMsg(env, chatId, "⏳ Đang gửi thông báo...");
       const stat = await executeBroadcast(env, draft);
@@ -2393,11 +2681,16 @@ async function handleMessage(msg, env, ctx = null) {
       await env.SUBSCRIBERS_KV.put(`draft:${fromId}`, JSON.stringify(draft), { expirationTtl: 900 });
     }
     const users = await listAllSubscribers(env);
-    const activeCount = users.filter((u) => u.subscribed !== false && !u.blocked).length;
+    const activeUsers = users.filter((u) => u.subscribed !== false && !u.blocked && (!groupsOnly || isGroupRecord(u)));
+    const activeGrps = activeUsers.filter((u) => isGroupRecord(u)).length;
+    const activePrivs = activeUsers.length - activeGrps;
+    const scopeLabel = groupsOnly
+      ? `👥 ${activeGrps} nhóm`
+      : `👤 ${activePrivs} · 👥 ${activeGrps} nhóm`;
     const preview = formatBroadcastPayload(arg, false);
     const confirmKb = {
       inline_keyboard: [
-        [{ text: `✅ Gửi ngay (${activeCount} người)`, callback_data: "adm:bc_send" }],
+        [{ text: `✅ Gửi ngay (${activeUsers.length} mục tiêu)`, callback_data: "adm:bc_send" }],
         [
           { text: "🧪 Thử riêng", callback_data: "adm:bc_preview" },
           { text: "❌ Huỷ", callback_data: "adm:bc_cancel" },
@@ -2407,7 +2700,7 @@ async function handleMessage(msg, env, ctx = null) {
     if (photoFileId) {
       await sendPhotoMsg(env, chatId, photoFileId, preview, confirmKb);
     } else {
-      await sendMsg(env, chatId, `<b>Xem trước (${activeCount} người nhận)</b>\n\n` + preview, confirmKb);
+      await sendMsg(env, chatId, `<b>Xem trước (${scopeLabel})</b>\n\n` + preview, confirmKb);
     }
     return;
   }
@@ -2422,33 +2715,85 @@ async function handleMessage(msg, env, ctx = null) {
     return;
   }
 
-  // 3) User settings & static views
+  // 3) User & Group settings / static views
   if (cmd === "/notify") {
-    const v = await userNotifyView(env, chatId);
-    await sendMsg(env, chatId, v.text, v.markup);
+    const v = await userNotifyView(env, chatId, isGroup);
+    await sendMsg(env, chatId, v.text, v.markup, threadExtra);
+    return;
+  }
+  if (cmd === "/bat" || cmd === "/tat") {
+    if (isGroup && !(await canManageGroup(env, msg.chat, fromId))) {
+      await sendMsg(env, chatId, "⛔ Chỉ Quản trị viên nhóm mới bật/tắt thông báo của nhóm.", null, threadExtra);
+      return;
+    }
+    const enable = cmd === "/bat";
+    await setUserSubscription(env, chatId, enable, false);
+    const v = await userNotifyView(env, chatId, isGroup);
+    await sendMsg(env, chatId, v.text, v.markup, threadExtra);
+    return;
+  }
+  if (cmd === "/settopic") {
+    if (!isGroup) {
+      await sendMsg(env, chatId, "ℹ️ Lệnh <code>/settopic</code> chỉ dùng trong Nhóm Telegram có bật Chủ đề (Topics).");
+      return;
+    }
+    if (!(await canManageGroup(env, msg.chat, fromId))) {
+      await sendMsg(env, chatId, "⛔ Chỉ Quản trị viên nhóm mới cài đặt được chủ đề nhận tin.", null, threadExtra);
+      return;
+    }
+    const reset = arg.toLowerCase() === "off" || arg.toLowerCase() === "reset";
+    if (reset || !msg.message_thread_id) {
+      await setGroupTopic(env, chatId, null);
+      await sendMsg(
+        env,
+        chatId,
+        "✅ <b>Đã đặt kênh chính của nhóm</b> làm nơi nhận thông báo tự động từ 7 cổng HUB.",
+        null,
+        threadExtra
+      );
+      return;
+    }
+    await setGroupTopic(env, chatId, msg.message_thread_id);
+    await sendMsg(
+      env,
+      chatId,
+      `✅ <b>Đã ghim chủ đề này (<code>#${msg.message_thread_id}</code>)</b> làm nơi nhận thông báo tự động của nhóm.`,
+      null,
+      threadExtra
+    );
     return;
   }
   if (cmd === "/start" || cmd === "/menu") {
-    const v = mainMenuView();
-    await sendMsg(env, chatId, v.text, v.markup);
+    const v = mainMenuView(viewOpts);
+    await sendMsg(env, chatId, v.text, v.markup, threadExtra);
     return;
   }
   if (cmd === "/help") {
-    const v = helpView();
-    await sendMsg(env, chatId, v.text, v.markup);
+    const v = helpView(viewOpts);
+    await sendMsg(env, chatId, v.text, v.markup, threadExtra);
     return;
   }
   if (cmd === "/portals" || cmd === "/links") {
     const v = quickLinksView();
-    await sendMsg(env, chatId, v.text, v.markup);
+    await sendMsg(env, chatId, v.text, v.markup, threadExtra);
     return;
   }
   if (cmd === "/author" || cmd === "/about") {
     const v = authorView();
-    await sendMsg(env, chatId, v.text, v.markup);
+    await sendMsg(env, chatId, v.text, v.markup, threadExtra);
     return;
   }
   if (cmd === "/clear") {
+    if (isGroup) {
+      await sendMsg(
+        env,
+        chatId,
+        "ℹ️ Tính năng dọn chat chỉ dùng trong tin nhắn riêng để bảo vệ lịch sử của nhóm.",
+        null,
+        threadExtra
+      );
+      return;
+    }
     const reqCount = parseInt(arg, 10) || 100;
     await clearChatHistory(env, chatId, msg.message_id, reqCount);
     await sendMsg(
@@ -2509,14 +2854,15 @@ async function handleMessage(msg, env, ctx = null) {
     const kw = arg.trim();
     if (!kw) {
       const v = searchMenuView();
-      await sendMsg(env, chatId, v.text, v.markup);
+      await sendMsg(env, chatId, v.text, v.markup, threadExtra);
       return;
     }
     const safeKw = truncateUtf8(kw.replace(/:/g, " "), 36).trim();
     route = `q:${safeKw}:1`;
     loadingText = `🔎 Đang tìm "<b>${escapeHtml(safeKw)}</b>"...`;
   } else {
-    const v = mainMenuView();
+    if (!isPrivate) return;
+    const v = mainMenuView(viewOpts);
     await sendMsg(env, chatId, v.text, v.markup);
     return;
   }
@@ -2525,16 +2871,16 @@ async function handleMessage(msg, env, ctx = null) {
   const needsLoading = route.startsWith("rf:") || route === "list:all:30:1" || !(await isSnapshotWarm(env));
   let msgId = null;
   if (needsLoading) {
-    const sent = await sendMsg(env, chatId, loadingText);
+    const sent = await sendMsg(env, chatId, loadingText, null, threadExtra);
     msgId = sent && sent.result && sent.result.message_id;
   }
 
   try {
-    const view = await renderRoute(route, false, env, ctx);
+    const view = await renderRoute(route, false, env, ctx, viewOpts);
     if (msgId) {
       await editMsg(env, chatId, msgId, view.text, view.markup);
     } else {
-      await sendMsg(env, chatId, view.text, view.markup);
+      await sendMsg(env, chatId, view.text, view.markup, threadExtra);
     }
   } catch (e) {
     log("handleMessage route error", route, e);
@@ -2543,7 +2889,7 @@ async function handleMessage(msg, env, ctx = null) {
     if (msgId) {
       await editMsg(env, chatId, msgId, errText, fallbackKb);
     } else {
-      await sendMsg(env, chatId, errText, fallbackKb);
+      await sendMsg(env, chatId, errText, fallbackKb, threadExtra);
     }
   }
 }
@@ -2554,6 +2900,8 @@ async function handleCallback(cb, env, ctx = null) {
   const chatId = msg && msg.chat && msg.chat.id;
   const fromId = (cb.from && cb.from.id) || chatId;
   const messageId = msg && msg.message_id;
+  const isGroup = isGroupChat(msg && msg.chat);
+  const threadExtra = isGroup && msg && msg.message_thread_id ? { message_thread_id: msg.message_thread_id } : {};
 
   if (msg && msg.chat) {
     await trackSubscriber(env, msg.chat, cb.from, false);
@@ -2564,12 +2912,25 @@ async function handleCallback(cb, env, ctx = null) {
     return;
   }
 
+  if (data === "user:notify_view") {
+    await answerCb(env, cb.id);
+    if (chatId && messageId) {
+      const v = await userNotifyView(env, chatId, isGroup);
+      await editMsg(env, chatId, messageId, v.text, v.markup);
+    }
+    return;
+  }
+
   if (data === "user:notify_on" || data === "user:notify_off") {
+    if (isGroup && !(await canManageGroup(env, msg.chat, fromId))) {
+      await answerCb(env, cb.id, "⛔ Chỉ Quản trị viên nhóm mới thay đổi được cài đặt này.", true);
+      return;
+    }
     const enable = data === "user:notify_on";
     await setUserSubscription(env, chatId, enable, false);
     await answerCb(env, cb.id, enable ? "Đã bật thông báo" : "Đã tắt thông báo");
     if (chatId && messageId) {
-      const v = await userNotifyView(env, chatId);
+      const v = await userNotifyView(env, chatId, isGroup);
       await editMsg(env, chatId, messageId, v.text, v.markup);
     }
     return;
@@ -2577,6 +2938,10 @@ async function handleCallback(cb, env, ctx = null) {
 
   // Admin callbacks
   if (data.startsWith("adm:")) {
+    if (isGroup) {
+      await answerCb(env, cb.id, "🔒 Vui lòng mở Admin trong tin nhắn riêng.", true);
+      return;
+    }
     if (!(await isAdminUser(env, fromId))) {
       await answerCb(env, cb.id, "⛔ Chỉ dành cho Admin", true);
       return;
@@ -2588,9 +2953,12 @@ async function handleCallback(cb, env, ctx = null) {
       return;
     }
     if (data.startsWith("adm:users:")) {
-      const page = parseInt(data.split(":")[2], 10) || 1;
+      const parts = data.split(":");
+      const hasFilter = parts.length >= 4;
+      const filter = hasFilter ? parts[2] : "all";
+      const page = parseInt(hasFilter ? parts[3] : parts[2], 10) || 1;
       await answerCb(env, cb.id);
-      const v = await adminUsersView(env, page);
+      const v = await adminUsersView(env, page, filter);
       await editMsg(env, chatId, messageId, v.text, v.markup);
       return;
     }
@@ -2701,6 +3069,10 @@ async function handleCallback(cb, env, ctx = null) {
   }
 
   if (data === "clear:ask") {
+    if (isGroup) {
+      await answerCb(env, cb.id, "Chỉ dùng trong chat riêng để bảo vệ lịch sử nhóm.", true);
+      return;
+    }
     await answerCb(env, cb.id);
     if (chatId && messageId) {
       await editMsg(
@@ -2723,6 +3095,10 @@ async function handleCallback(cb, env, ctx = null) {
   }
 
   if (data.startsWith("clear:run:")) {
+    if (isGroup) {
+      await answerCb(env, cb.id, "Chỉ dùng trong chat riêng.", true);
+      return;
+    }
     const count = parseInt(data.split(":")[2], 10) || 100;
     await answerCb(env, cb.id, "Đang dọn...");
     if (chatId && messageId) {
@@ -2749,7 +3125,8 @@ async function handleCallback(cb, env, ctx = null) {
         env,
         chatId,
         "🔎 <b>Nhập từ khoá cần tìm</b> (không cần dấu):",
-        { force_reply: true, input_field_placeholder: "VD: hoc bong, lich thi, hoc phi..." }
+        { force_reply: true, selective: isGroup, input_field_placeholder: "VD: hoc bong, lich thi, hoc phi..." },
+        threadExtra
       );
     }
     return;
@@ -2766,7 +3143,8 @@ async function handleCallback(cb, env, ctx = null) {
   if (!chatId || !messageId) return;
 
   try {
-    const view = await renderRoute(data, false, env, ctx);
+    const botMeta = (data === "m:home" || data === "m:help") ? await getBotMeta(env) : { username: "" };
+    const view = await renderRoute(data, false, env, ctx, { isGroup, botUsername: botMeta.username || "" });
     await editMsg(env, chatId, messageId, view.text, view.markup);
   } catch (e) {
     log("handleCallback error", data, e);
@@ -2828,7 +3206,9 @@ async function handleInlineQuery(iq, env, ctx = null) {
 }
 
 async function processUpdate(update, env, ctx = null) {
-  if (update.callback_query) {
+  if (update.my_chat_member) {
+    await handleMyChatMember(update.my_chat_member, env);
+  } else if (update.callback_query) {
     await handleCallback(update.callback_query, env, ctx);
   } else if (update.message) {
     await handleMessage(update.message, env, ctx);
@@ -2848,25 +3228,35 @@ async function handleSetup(request, env) {
     return new Response("Missing BOT_TOKEN", { status: 500 });
   }
   const webhookUrl = `${url.origin}/webhook`;
-  const [rHook, rCmds, rMenu, rName] = await Promise.all([
+  const [rHook, rCmds, rGroupCmds, rMenu, rName, meta] = await Promise.all([
     tgApi(env, "setWebhook", {
       url: webhookUrl,
-      allowed_updates: ["message", "callback_query", "inline_query"],
+      allowed_updates: ["message", "callback_query", "inline_query", "my_chat_member"],
       drop_pending_updates: false,
     }),
     tgApi(env, "setMyCommands", { commands: BOT_COMMANDS }),
+    tgApi(env, "setMyCommands", {
+      commands: GROUP_BOT_COMMANDS,
+      scope: { type: "all_group_chats" },
+    }),
     tgApi(env, "setChatMenuButton", { menu_button: { type: "commands" } }),
     tgApi(env, "setMyName", { name: BOT_BRAND }),
+    getBotMeta(env, true),
   ]);
 
   return new Response(
     JSON.stringify(
       {
-        status: rHook.ok && rCmds.ok && rMenu.ok ? "ALL_OK" : "PARTIAL_ERROR",
+        status: rHook.ok && rCmds.ok && rGroupCmds.ok && rMenu.ok ? "ALL_OK" : "PARTIAL_ERROR",
         bot_name: BOT_BRAND,
+        bot_username: meta.username || "",
+        can_join_groups: Boolean(meta.canJoinGroups),
+        can_read_all_group_messages: Boolean(meta.canReadAllGroupMessages),
+        add_to_group_url: meta.username ? `https://t.me/${meta.username}?startgroup=hubnews` : "",
         webhook_url: webhookUrl,
         setWebhook: rHook,
         setMyCommands: rCmds,
+        setGroupCommands: rGroupCmds,
         setChatMenuButton: rMenu,
         setMyName: rName,
       },
@@ -2928,6 +3318,7 @@ export default {
 export {
   SOURCES,
   BOT_COMMANDS,
+  GROUP_BOT_COMMANDS,
   parseOnlineItems,
   parseDnnNotif,
   parseDnnNews,
@@ -2936,6 +3327,7 @@ export {
   fetchArticleDetail,
   classifyItem,
   runAutoMonitorCron,
+  processUpdate,
   mainMenuView,
   portalsMenuView,
   topicsMenuView,

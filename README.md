@@ -19,29 +19,24 @@ Bot Telegram tối giản theo dõi tự động **7 cổng thông tin chính th
 - **Tối ưu tốc độ Online HUB (#1):** Edge cache 45s, lazy pagination (chỉ tải 1 trang cho 10 tin đầu), timeout nhanh kết hợp retry luân phiên `/` & `/Default.aspx` và bản đệm KV (`cache:online_lkg`) phòng khi máy chủ trường quá tải.
 - **Tự động báo tin mới mỗi 5 phút thật:** Chạy trực tiếp trên Cloudflare Workers Cron Trigger (`*/5 * * * *`), tự khử trùng chéo cổng, trích xuất PDF và gửi tới tất cả người dùng đã `/start`.
 - **Đọc nhanh & tải PDF trong Telegram:** Bấm số `1–5` dưới mỗi danh sách để đọc nội dung và mở tệp đính kèm trực tiếp.
-- **Quản trị & phát sóng (`/admin`, `/bc`, `/bc!`):** Gửi thông báo văn bản hoặc ảnh kèm chú thích tới toàn bộ người dùng đã đăng ký.
+- **Hỗ trợ đầy đủ Nhóm lớp Telegram (0 eKYC):** Tự động đăng ký nhóm khi được mời vào (`my_chat_member`), bảo vệ quyền bật/tắt thông báo theo Quản trị viên nhóm (`/notify`, `/bat`, `/tat`), hỗ trợ Forum Topics (`/settopic`), tự chuyển đổi khi nhóm nâng cấp `supergroup`, và lọc riêng danh sách nhóm trong `/admin` (`/bcg`).
+- **Quản trị & phát sóng (`/admin`, `/bc`, `/bc!`, `/bcg`):** Gửi thông báo văn bản hoặc ảnh kèm chú thích tới toàn bộ người dùng và nhóm lớp đã đăng ký.
 
 ## Danh sách lệnh
 
 - `/menu` — Bảng điều khiển chính
-- `/online` — Cổng SV Online HUB (Ưu tiên #1)
-- `/latest` · `/full7d` · `/full30d` — Tin mới nhất / 7 ngày / 30 ngày
+- `/latest` · `/online` — Tin mới nhất toàn HUB / Online HUB (Ưu tiên #1)
+- `/full7d` · `/full30d` — Tin 7 ngày / 30 ngày
 - `/find <từ khoá>` — Tìm kiếm không dấu (hoặc nhắn trực tiếp vào chat)
 - `/thi` · `/daotao` · `/scc` · `/hocphi` · `/hocbong` — Lọc nhanh chuyên mục
-- `/digest` · `/portals` · `/status` · `/notify` · `/clear` · `/author` · `/help`
-- `/admin` · `/bc` · `/bc!` — Khu vực Quản trị viên
+- `/digest` · `/portals` · `/status` · `/notify` · `/bat` · `/tat` · `/settopic` · `/clear` · `/author` · `/help`
+- `/admin` · `/bc` · `/bc!` · `/bcg` — Khu vực Quản trị viên (chat riêng)
 
-## Triển khai
+## Triển khai & Thêm vào Nhóm lớp
 
-### 1. Telegram Bot (`cloudflare-worker.js`)
 1. Deploy `cloudflare-worker.js` lên Cloudflare Worker (`buh-monitor`) có biến `BOT_TOKEN`, `SUBSCRIBERS_KV`, và Cron Trigger `*/5 * * * *`.
-2. Mở `https://<worker>.workers.dev/setup` để đồng bộ Webhook, danh sách lệnh, tên Bot **HUB News** và nút `Menu`.
-
-### 2. Zalo Bot (`zalo-worker.js` — Hỗ trợ chat 1-1 & thêm vào Nhóm Zalo)
-1. Mở Mini App **Zalo Bot Creator** (`bot.zapps.me`) trên Zalo → tạo Bot tên **HUB News** → sao chép `ZALO_BOT_TOKEN`.
-2. Deploy `zalo-worker.js` lên Cloudflare Worker (`hub-news-zalo`) dùng chung `SUBSCRIBERS_KV`, thêm secret `ZALO_BOT_TOKEN` (và `ZALO_ADMIN_PIN`) + Cron Trigger `1-59/5 * * * *`.
-3. Mở `https://hub-news-zalo.<subdomain>.workers.dev/setup` để đăng ký Webhook Zalo tự động.
-4. **Thêm Bot vào nhóm Zalo:** Trong **Zalo Bot Creator** (`bot.zapps.me`) → chọn Bot **HUB News** → **Mời Bot vào nhóm** → gửi link vào nhóm Zalo → Trưởng nhóm bấm **Xác nhận**. Trong nhóm, thành viên gõ `@HUB News /latest`, `@HUB News /menu`, hoặc `@HUB News <từ khoá>`.
+2. Mở `https://<worker>.workers.dev/setup` để đồng bộ Webhook (`my_chat_member`), lệnh cá nhân & nhóm, tên Bot **HUB News** và nút `Menu`.
+3. **Thêm vào Nhóm Telegram:** Bấm nút `➕ Thêm vào nhóm lớp` ngay trong `/menu` của BOT (hoặc thêm BOT từ mục *Thêm thành viên* trong nhóm) → BOT tự chào và tự đẩy thông báo 7 cổng HUB vào nhóm mỗi 5 phút. Nếu nhóm bật **Topics (Chủ đề)**, Quản trị nhóm gõ `/settopic` ngay trong chủ đề muốn nhận tin.
 
 ## Tác giả
 
