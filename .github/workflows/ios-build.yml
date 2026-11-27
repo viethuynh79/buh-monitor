@@ -1,0 +1,76 @@
+name: Build HUB News iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ios-app/**'
+      - '.github/workflows/ios-build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios-app
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Run iOS XCTest unit tests on Simulator
+        run: |
+          SIM_ID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)['devices']
+          best = None
+          for rt, devs in sorted(data.items(), reverse=True):
+            if 'iOS' not in rt: continue
+            for d in devs:
+              if d.get('isAvailable') and 'iPhone' in d.get('name', ''):
+                best = d['udid']
+                break
+            if best: break
+          print(best or '')
+          ")
+          echo "Using Simulator UDID: $SIM_ID"
+          xcodebuild test \
+            -project HUBNews.xcodeproj \
+            -scheme HUBNews \
+            -destination "platform=iOS Simulator,id=$SIM_ID" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Build unsigned iOS arm64 release IPA
+        run: |
+          xcodebuild build \
+            -project HUBNews.xcodeproj \
+            -scheme HUBNews \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM=""
+
+          mkdir -p dist/Payload
+          cp -R build/Build/Products/Release-iphoneos/HUBNews.app dist/Payload/
+          (cd dist && zip -qr HUB-News-iOS-v1.1.0.ipa Payload)
+          ls -lh dist/HUB-News-iOS-v1.1.0.ipa
+
+      - name: Upload iOS IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HUB-News-iOS-IPA
+          path: ios-app/dist/HUB-News-iOS-v1.1.0.ipa
+          retention-days: 30

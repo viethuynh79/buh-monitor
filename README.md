@@ -44,7 +44,15 @@ Bot Telegram tối giản theo dõi tự động **7 cổng thông tin chính th
 
 - **Thông báo đẩy nền tự động:** Chạy nền bằng Android `WorkManager` (tự khôi phục sau khởi động lại máy) + chế độ tuỳ chọn **Quét nhanh 5 phút**, hỗ trợ chọn riêng từng cổng HUB, lọc tin Khẩn và nhận trực tiếp phát sóng từ Quản trị viên (`/bc`, `/bc!`).
 - **Đọc nhanh & tải PDF:** Bấm thông báo để mở thẳng bài chi tiết, hạn nộp nổi bật và tải PDF vào `Downloads/HUBNews/`.
-- **Biên dịch tự động:** GitHub Actions (`.github/workflows/android-build.yml`) chạy unit test và xuất sẵn tệp `HUB-News-v1.0.0.apk`.
+- **Biên dịch tự động:** GitHub Actions (`.github/workflows/android-build.yml`) chạy unit test và xuất sẵn tệp `HUB-News-v1.1.0.apk`.
+
+## Ứng dụng iOS (`ios-app/`)
+
+Ứng dụng iOS thuần **Swift + SwiftUI (iOS 16+)** đồng bộ Logo HUB, bảng màu Trắng (`#FFFFFF`) – Đỏ (`#A71B28`) – Xanh Đậm (`#203469`) và dùng chung JSON API trên Cloudflare Worker:
+
+- **Thông báo đẩy nền iOS:** `UNUserNotificationCenter` + `BGAppRefreshTask` (tự đồng bộ 7 cổng HUB và phát sóng Admin `/bc`, bấm vào thông báo mở thẳng chi tiết bài viết).
+- **Trải nghiệm mượt mà 120Hz:** Bộ đệm LRU 40 bài + prefetch 3 tin đầu (mở gần như 0ms), đọc PDF & bài gốc ngay trong ứng dụng bằng `SFSafariViewController`, chia sẻ native (`ShareLink`), Haptic feedback và chế độ Sáng/Tối.
+- **Biên dịch tự động trên macOS:** GitHub Actions (`.github/workflows/ios-build.yml`) tạo dự án bằng `XcodeGen`, chạy `XCTest` trên iOS Simulator và xuất tệp `HUB-News-iOS-v1.1.0.ipa` (cài lên iPhone qua AltStore / SideStore / Sideloadly / TrollStore hoặc mở `HUBNews.xcodeproj` trên Xcode).
 
 ## Tác giả
 

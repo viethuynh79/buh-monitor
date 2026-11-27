@@ -1,0 +1,75 @@
+name: HUBNews
+options:
+  bundleIdPrefix: vn.hub
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  defaultConfig: Release
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "2"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+targets:
+  HUBNews:
+    type: application
+    platform: iOS
+    sources:
+      - path: HUBNews
+    info:
+      path: HUBNews/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: HUB News
+        CFBundleName: HUB News
+        CFBundleShortVersionString: "1.1.0"
+        CFBundleVersion: "2"
+        ITSAppUsesNonExemptEncryption: false
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - vn.hub.news.refresh
+        UILaunchScreen:
+          UIImageName: HUBLogo
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: vn.hub.news
+        PRODUCT_NAME: HUBNews
+        INFOPLIST_KEY_CFBundleDisplayName: HUB News
+        GENERATE_INFOPLIST_FILE: NO
+
+  HUBNewsTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: HUBNewsTests
+    dependencies:
+      - target: HUBNews
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: vn.hub.news.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  HUBNews:
+    build:
+      targets:
+        HUBNews: all
+        HUBNewsTests: [test]
+    test:
+      targets:
+        - HUBNewsTests
