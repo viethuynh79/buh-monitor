@@ -354,13 +354,35 @@ def get_hidden_fields(html_text):
     return fields
 
 
+ONL_LINK_RE = re.compile(r'^(\d+)"[^>]*>(.*?)</a>', re.S)
+ONL_DATE_RE = re.compile(r'class="inputdate"[^>]*>(\d{1,2}/\d{1,2}/\d{4})<')
+DNN_NOTIF_DAY_RE = re.compile(r'<span class="day">(\d{1,2})</span>\s*<span class="month-year">(\d{1,2})\.(\d{4})</span>')
+DNN_NEWS_DATE_RE = re.compile(r'<p class="news-date">(\d{1,2}/\d{1,2}/\d{4})</p>')
+DNN_LINK_RE = re.compile(r'<h3 class="news-title">\s*<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', re.S)
+
+
 def parse_online_items(page_html):
+    idx = page_html.find('title="Messages.aspx?ID=')
+    if idx < 0:
+        return []
+    last_idx = page_html.rfind('title="Messages.aspx?ID=')
+    chunk = page_html[idx:min(len(page_html), last_idx + 1600)]
     items = []
-    for m in ONLINE_ITEM_RE.finditer(page_html):
-        msg_id = m.group(1)
-        title = clean_text(m.group(2))
-        dt = parse_date(m.group(3))
+    seen = set()
+    for seg in chunk.split('title="Messages.aspx?ID=')[1:]:
+        lm = ONL_LINK_RE.search(seg)
+        if not lm:
+            continue
+        dm = ONL_DATE_RE.search(seg)
+        if not dm:
+            continue
+        msg_id = lm.group(1)
+        if msg_id in seen:
+            continue
+        title = clean_text(lm.group(2))
+        dt = parse_date(dm.group(1))
         if title and dt:
+            seen.add(msg_id)
             items.append({
                 "id": msg_id,
                 "source": "online",
@@ -381,25 +403,30 @@ def _extract_dnn_id(url):
 
 
 def parse_dnn_notif(page_html, src):
-    m_main = re.search(r'<div class="notification-list mt-8">(.*?)</section>', page_html, re.S)
-    chunk = m_main.group(1) if m_main else page_html
-    pattern = re.compile(
-        r'<div class="notification-item">.*?'
-        r'<span class="day">(\d{1,2})</span>\s*<span class="month-year">(\d{1,2})\.(\d{4})</span>.*?'
-        r'<h3 class="news-title">\s*<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
-        re.S,
-    )
+    start = page_html.find('<div class="notification-list mt-8">')
+    if start >= 0:
+        end = page_html.find("</section>", start)
+        chunk = page_html[start:end] if end > start else page_html[start:]
+    else:
+        chunk = page_html
     items = []
     seen_ids = set()
-    for m in pattern.finditer(chunk):
-        day, mo, yr = m.group(1).zfill(2), m.group(2).zfill(2), m.group(3)
-        href = html_lib.unescape(m.group(4)).strip()
+    for seg in chunk.split('<div class="notification-item">')[1:]:
+        dm = DNN_NOTIF_DAY_RE.search(seg)
+        if not dm:
+            continue
+        lm = DNN_LINK_RE.search(seg)
+        if not lm:
+            continue
+        href = html_lib.unescape(lm.group(1)).strip()
         if href.startswith("/"):
             href = src["base"] + href
-        title = clean_text(m.group(5))
-        dt = parse_date("{}/{}/{}".format(day, mo, yr))
         iid = _extract_dnn_id(href)
-        if title and dt and iid not in seen_ids:
+        if iid in seen_ids:
+            continue
+        title = clean_text(lm.group(2))
+        dt = parse_date("{}/{}/{}".format(dm.group(1).zfill(2), dm.group(2).zfill(2), dm.group(3)))
+        if title and dt:
             seen_ids.add(iid)
             items.append({
                 "id": iid,
@@ -417,25 +444,31 @@ def parse_dnn_news(page_html, src):
     if src["type"] == "dnn_pdt_home":
         chunk = page_html
     else:
-        m_main = re.search(r'<div class="news-list mt-8">(.*?)</section>', page_html, re.S)
-        chunk = m_main.group(1) if m_main else page_html
+        start = page_html.find('<div class="news-list mt-8">')
+        if start >= 0:
+            end = page_html.find("</section>", start)
+            chunk = page_html[start:end] if end > start else page_html[start:]
+        else:
+            chunk = page_html
 
-    pattern = re.compile(
-        r'<div class="news-item">.*?'
-        r'<p class="news-date">(\d{1,2}/\d{1,2}/\d{4})</p>\s*'
-        r'<h3 class="news-title">\s*<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
-        re.S,
-    )
     items = []
     seen_ids = set()
-    for m in pattern.finditer(chunk):
-        dt = parse_date(m.group(1))
-        href = html_lib.unescape(m.group(2)).strip()
+    for seg in chunk.split('<div class="news-item">')[1:]:
+        dm = DNN_NEWS_DATE_RE.search(seg)
+        if not dm:
+            continue
+        lm = DNN_LINK_RE.search(seg)
+        if not lm:
+            continue
+        href = html_lib.unescape(lm.group(1)).strip()
         if href.startswith("/"):
             href = src["base"] + href
-        title = clean_text(m.group(3))
         iid = _extract_dnn_id(href)
-        if title and dt and iid not in seen_ids:
+        if iid in seen_ids:
+            continue
+        title = clean_text(lm.group(2))
+        dt = parse_date(dm.group(1))
+        if title and dt:
             seen_ids.add(iid)
             code = src["code"]
             if src["key"] == "daotao_news" and "/xet-tot-nghiep/" in href:
@@ -850,7 +883,7 @@ def fetch_all_sources(max_pages_online=1):
                 "count": 0,
             }
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCES)) as ex:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
         futs = [ex.submit(_worker, s) for s in SOURCES]
         for f in futs:
             k, its, m = f.result()

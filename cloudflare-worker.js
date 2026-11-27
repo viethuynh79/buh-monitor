@@ -6,16 +6,36 @@
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const VN_OFFSET = 7 * 3600 * 1000;
 const PAGE_SIZE = 5;
-const CACHE_TTL_SEC = 90;
+const CACHE_TTL_SEC = 60;
 const ONLINE_CACHE_TTL_SEC = 45;
-const ONLINE_SWR_MAX_AGE_MS = 6 * 60 * 1000;
-const DETAIL_CACHE_TTL_SEC = 300;
+const DETAIL_CACHE_TTL_SEC = 600;
+const SUBSCRIBERS_CACHE_TTL_SEC = 60;
+const SNAPSHOT_WRITE_INTERVAL_MS = 10 * 60 * 1000;
+const SNAPSHOT_SWR_MAX_AGE_MS = 15 * 60 * 1000;
+const SNAPSHOT_BG_REFRESH_MS = 3 * 60 * 1000;
+const FETCH_CONCURRENCY = 4;
 const LINE = "────────────";
 
 const ONLINE_HOME = "https://online.hub.edu.vn/";
 const ONLINE_ALT = "https://online.hub.edu.vn/Default.aspx";
 const ONLINE_GRID_TARGET = "ctl00$ContentPlaceHolder1$ctl00$ctl00$ctl00$ctl00$grvNewsgroup";
-const ONLINE_ITEM_RE = /title="Messages\.aspx\?ID=(\d+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<span[^>]*class="inputdate"[^>]*>(\d{1,2}\/\d{1,2}\/\d{4})<\/span>/g;
+
+const HTML_ENTITIES = {
+  nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+  acirc: "â", Acirc: "Â", ecirc: "ê", Ecirc: "Ê", ocirc: "ô", Ocirc: "Ô",
+  aacute: "á", Aacute: "Á", agrave: "à", Agrave: "À",
+  eacute: "é", Eacute: "É", egrave: "è", Egrave: "È",
+  iacute: "í", Iacute: "Í", igrave: "ì", Igrave: "Ì",
+  oacute: "ó", Oacute: "Ó", ograve: "ò", Ograve: "Ò",
+  uacute: "ú", Uacute: "Ú", ugrave: "ù", Ugrave: "Ù",
+};
+const ENTITY_RE = /&(?:#(\d+)|#x([0-9a-f]+)|([a-zA-Z]+));/g;
+const TAG_RE = /<[^>]+>/g;
+const WS_RE = /\s+/g;
+const ACCENT_RE = /[\u0300-\u036f]/g;
+const TITLE_PREFIX_RE = /^(?:thong\s+bao|tb)\s*(?:so\s+\S+\s*)?(?:ngay\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s*)?(?:v\/v|ve\s+viec)?\s*/;
+const NON_ALNUM_RE = /[^a-z0-9]+/g;
+const DEADLINE_RE = /(?:hạn\s+cuối|trước\s+ngày|đến\s+hết\s+ngày|chậm\s+nhất|hạn\s+nộp|thời\s+hạn|từ\s+ngày\s+\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\s+đến(?:\s+hết)?\s+ngày)[^.\n;]{0,65}?(?<!\d)\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?(?!\d)/i;
 
 const AUTHOR_NAME = "Huynh Viet";
 const AUTHOR_FB_URL = "https://www.facebook.com/profile.php?id=61591547874181";
@@ -171,29 +191,20 @@ function log(...args) {
 // ---------------------------------------------------------------- Text & Helpers
 
 function decodeEntities(s) {
-  return String(s || "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&acirc;/g, "â").replace(/&Acirc;/g, "Â")
-    .replace(/&ecirc;/g, "ê").replace(/&Ecirc;/g, "Ê")
-    .replace(/&ocirc;/g, "ô").replace(/&Ocirc;/g, "Ô")
-    .replace(/&aacute;/g, "á").replace(/&agrave;/g, "à")
-    .replace(/&eacute;/g, "é").replace(/&egrave;/g, "è")
-    .replace(/&iacute;/g, "í").replace(/&igrave;/g, "ì")
-    .replace(/&oacute;/g, "ó").replace(/&ograve;/g, "ò")
-    .replace(/&uacute;/g, "ú").replace(/&ugrave;/g, "ù")
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)));
+  const str = String(s || "");
+  if (!str.includes("&")) return str;
+  return str.replace(ENTITY_RE, (m, dec, hex, named) => {
+    if (dec) return String.fromCodePoint(+dec);
+    if (hex) return String.fromCodePoint(parseInt(hex, 16));
+    const v = HTML_ENTITIES[named] ?? HTML_ENTITIES[named.toLowerCase()];
+    return v !== undefined ? v : m;
+  });
 }
 
 function cleanText(raw) {
-  return decodeEntities(String(raw || "").replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ")
-    .trim();
+  const s = String(raw || "");
+  const noTags = s.includes("<") ? s.replace(TAG_RE, " ") : s;
+  return decodeEntities(noTags).replace(WS_RE, " ").trim();
 }
 
 function escapeHtml(s) {
@@ -208,7 +219,7 @@ function stripAccents(s) {
     .replace(/đ/g, "d")
     .replace(/Đ/g, "D")
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(ACCENT_RE, "");
 }
 
 function truncateUtf8(str, maxBytes) {
@@ -224,13 +235,10 @@ function truncateUtf8(str, maxBytes) {
   return out;
 }
 
-function normalizeTitleKey(title) {
-  let s = stripAccents(title).toLowerCase();
-  s = s.replace(
-    /^(?:thong\s+bao|tb)\s*(?:so\s+\S+\s*)?(?:ngay\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s*)?(?:v\/v|ve\s+viec)?\s*/,
-    ""
-  );
-  return s.replace(/[^a-z0-9]+/g, " ").trim();
+function normalizeTitleKey(title, preNorm = "") {
+  let s = preNorm || stripAccents(title).toLowerCase();
+  s = s.replace(TITLE_PREFIX_RE, "");
+  return s.replace(NON_ALNUM_RE, " ").trim();
 }
 
 function parseDate(s) {
@@ -265,57 +273,67 @@ function vnTimeOnly() {
   return `${String(now.getUTCHours()).padStart(2, "0")}:${String(now.getUTCMinutes()).padStart(2, "0")}`;
 }
 
-function isUrgentTitle(title) {
-  const s = stripAccents(title).toLowerCase();
-  return [
-    "huy hoc phan", "canh bao", "han cuoi", "khan", "bo sung",
-    "vi pham", "vang thi", "kiem do", "tam ngung", "lua dao",
-    "bat buoc", "thoi hoc",
-  ].some((k) => s.includes(k));
+const URGENT_KWS = [
+  "huy hoc phan", "canh bao", "han cuoi", "khan", "bo sung",
+  "vi pham", "vang thi", "kiem do", "tam ngung", "lua dao",
+  "bat buoc", "thoi hoc",
+];
+const EXAM_KWS = [
+  "lich thi", "phuc khao", "vang thi", "xoa diem", "diem i",
+  "exam.hub", "quy che thi", "danh gia nang luc", "thi ket thuc",
+  "khao thi", "bang diem",
+];
+const TUITION_KWS = [
+  "hoc phi", "mien, giam", "mien giam", "cong no", "le phi",
+  "ho tro chi phi", "tro cap xa hoi", "thu phi",
+];
+const SCHOLAR_KWS = [
+  "hoc bong", "khen thuong", "sinh vien 5 tot", "tuyen duong",
+  "cuoc thi", "giai thuong", "finhack",
+];
+const GRAD_KWS = [
+  "tot nghiep", "thuc tap", "khoa luan", "do an", "phat bang",
+  "in bang", "trao bang", "chuan dau ra", "van bang",
+];
+const REG_KWS = [
+  "dang ky", "hoc phan", "huy hoc phan", "thoi khoa bieu",
+  "ke hoach", "tin chi", "hoc ghep", "gia han", "canh bao hoc vu",
+  "thoi hoc", "cam nang", "ren luyen",
+];
+const STUDENT_KWS = [
+  "ngoai tru", "the sinh vien", "tham quan", "kien tap", "huy dong",
+  "toa dam", "hoi thao", "tuyen dung", "viec lam", "doan", "tu van", "thu moi",
+];
+
+function hasAny(str, kws) {
+  for (let i = 0; i < kws.length; i++) {
+    if (str.includes(kws[i])) return true;
+  }
+  return false;
 }
 
-function classifyItem(title, sourceKey = "") {
-  const s = stripAccents(title).toLowerCase();
-  if (sourceKey === "ktdbcl" || [
-    "lich thi", "phuc khao", "vang thi", "xoa diem", "diem i",
-    "exam.hub", "quy che thi", "danh gia nang luc", "thi ket thuc",
-    "khao thi", "bang diem",
-  ].some((k) => s.includes(k))) return { key: "exam", ...TOPICS.exam };
+function isUrgentTitle(title, preNorm = "") {
+  const s = preNorm || stripAccents(title).toLowerCase();
+  return hasAny(s, URGENT_KWS);
+}
 
-  if (sourceKey === "ketoan" || [
-    "hoc phi", "mien, giam", "mien giam", "cong no", "le phi",
-    "ho tro chi phi", "tro cap xa hoi", "thu phi",
-  ].some((k) => s.includes(k))) return { key: "tuition", ...TOPICS.tuition };
-
-  if ([
-    "hoc bong", "khen thuong", "sinh vien 5 tot", "tuyen duong",
-    "cuoc thi", "giai thuong", "finhack",
-  ].some((k) => s.includes(k))) return { key: "scholar", ...TOPICS.scholar };
-
-  if ([
-    "tot nghiep", "thuc tap", "khoa luan", "do an", "phat bang",
-    "in bang", "trao bang", "chuan dau ra", "van bang",
-  ].some((k) => s.includes(k))) return { key: "grad", ...TOPICS.grad };
-
-  if ([
-    "dang ky", "hoc phan", "huy hoc phan", "thoi khoa bieu",
-    "ke hoach", "tin chi", "hoc ghep", "gia han", "canh bao hoc vu",
-    "thoi hoc", "cam nang", "ren luyen",
-  ].some((k) => s.includes(k))) return { key: "reg", ...TOPICS.reg };
-
-  if (sourceKey === "scc" || [
-    "ngoai tru", "the sinh vien", "tham quan", "kien tap", "huy dong",
-    "toa dam", "hoi thao", "tuyen dung", "viec lam", "doan", "tu van", "thu moi",
-  ].some((k) => s.includes(k))) return { key: "student", ...TOPICS.student };
-
+function classifyItem(title, sourceKey = "", preNorm = "") {
+  if (sourceKey === "ktdbcl") return { key: "exam", ...TOPICS.exam };
+  if (sourceKey === "ketoan") return { key: "tuition", ...TOPICS.tuition };
+  const s = preNorm || stripAccents(title).toLowerCase();
+  if (hasAny(s, EXAM_KWS)) return { key: "exam", ...TOPICS.exam };
+  if (hasAny(s, TUITION_KWS)) return { key: "tuition", ...TOPICS.tuition };
+  if (hasAny(s, SCHOLAR_KWS)) return { key: "scholar", ...TOPICS.scholar };
+  if (hasAny(s, GRAD_KWS)) return { key: "grad", ...TOPICS.grad };
+  if (hasAny(s, REG_KWS)) return { key: "reg", ...TOPICS.reg };
+  if (sourceKey === "scc" || hasAny(s, STUDENT_KWS)) return { key: "student", ...TOPICS.student };
   return { key: "general", ...TOPICS.general };
 }
 
 function extractDeadline(text) {
   if (!text) return "";
-  const re = /(?:hạn\s+cuối|trước\s+ngày|đến\s+hết\s+ngày|chậm\s+nhất|hạn\s+nộp|thời\s+hạn|từ\s+ngày\s+\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?\s+đến(?:\s+hết)?\s+ngày)[^.\n;]{0,65}?(?<!\d)\d{1,2}[\/.-]\d{1,2}(?:[\/.-]\d{2,4})?(?!\d)/i;
-  const m = text.match(re);
-  return m ? m[0].replace(/\s+/g, " ").trim().slice(0, 95) : "";
+  const m = text.match(DEADLINE_RE);
+  return m ? m[0].replace(WS_RE, " ").trim().slice(0, 95) : "";
 }
 
 function prettyFileName(url, idx) {
@@ -335,7 +353,20 @@ function prettyFileName(url, idx) {
 
 // ---------------------------------------------------------------- HTTP & Edge Cache
 
-async function fetchHTML(url, formData = null, cookie = "", timeoutMs = 7500, retries = 1) {
+async function runPool(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let nextIdx = 0;
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (nextIdx < items.length) {
+      const idx = nextIdx++;
+      results[idx] = await worker(items[idx], idx);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
+async function fetchHTML(url, formData = null, cookie = "", timeoutMs = 6000, retries = 1) {
   const headers = {
     "User-Agent": UA,
     "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
@@ -358,7 +389,10 @@ async function fetchHTML(url, formData = null, cookie = "", timeoutMs = 7500, re
       const targetUrl = (attempt > 1 && url === ONLINE_HOME && !formData) ? ONLINE_ALT : url;
       const res = await fetch(targetUrl, { ...baseOpts, signal: controller.signal });
       clearTimeout(timer);
-      if (!res.ok) throw new Error("HTTP " + res.status);
+      if (!res.ok) {
+        try { if (res.body) await res.body.cancel(); } catch (_) {}
+        throw new Error("HTTP " + res.status);
+      }
       const sc = res.headers.get("set-cookie") || "";
       const sess = sc ? sc.split(";")[0].trim() : "";
       const text = await res.text();
@@ -372,6 +406,15 @@ async function fetchHTML(url, formData = null, cookie = "", timeoutMs = 7500, re
     }
   }
   throw lastErr;
+}
+
+async function deleteEdgeCache(cacheKey) {
+  try {
+    if (typeof caches !== "undefined" && caches.default) {
+      const fakeUrl = new Request("https://hub-cache.internal/" + encodeURIComponent(cacheKey));
+      await caches.default.delete(fakeUrl);
+    }
+  } catch (_) {}
 }
 
 async function cachedJson(cacheKey, fetcher, bypassCache = false, ttlSec = CACHE_TTL_SEC) {
@@ -414,22 +457,40 @@ function getHiddenFields(html) {
   return fields;
 }
 
+const ONL_LINK_RE = /^(\d+)"[^>]*>([\s\S]*?)<\/a>/;
+const ONL_DATE_RE = /class="inputdate"[^>]*>(\d{1,2}\/\d{1,2}\/\d{4})</;
+const DNN_NOTIF_DAY_RE = /<span class="day">(\d{1,2})<\/span>\s*<span class="month-year">(\d{1,2})\.(\d{4})<\/span>/;
+const DNN_NEWS_DATE_RE = /<p class="news-date">(\d{1,2}\/\d{1,2}\/\d{4})<\/p>/;
+const DNN_LINK_RE = /<h3 class="news-title">\s*<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/;
+
 function parseOnlineItems(html) {
+  const firstIdx = html.indexOf('title="Messages.aspx?ID=');
+  if (firstIdx < 0) return [];
+  const lastIdx = html.lastIndexOf('title="Messages.aspx?ID=');
+  const chunk = html.slice(firstIdx, Math.min(html.length, lastIdx + 1600));
+  const parts = chunk.split('title="Messages.aspx?ID=');
   const items = [];
-  ONLINE_ITEM_RE.lastIndex = 0;
-  let m;
-  while ((m = ONLINE_ITEM_RE.exec(html)) !== null) {
-    const title = cleanText(m[2]);
-    const dt = parseDate(m[3]);
+  const seen = new Set();
+  for (let i = 1; i < parts.length; i++) {
+    const seg = parts[i];
+    const lm = ONL_LINK_RE.exec(seg);
+    if (!lm) continue;
+    const dm = ONL_DATE_RE.exec(seg);
+    if (!dm) continue;
+    const id = lm[1];
+    if (seen.has(id)) continue;
+    const title = cleanText(lm[2]);
+    const dt = parseDate(dm[1]);
     if (title && dt) {
+      seen.add(id);
       items.push({
-        id: m[1],
+        id,
         source: "online",
         code: "onl",
         title,
         date: fmtDate(dt),
         ts: dt.getTime(),
-        url: `https://online.hub.edu.vn/Messages.aspx?id=${m[1]}`,
+        url: `https://online.hub.edu.vn/Messages.aspx?id=${id}`,
       });
     }
   }
@@ -442,22 +503,28 @@ function extractDnnId(href) {
 }
 
 function parseDnnNotif(html, src) {
-  const mainMatch = html.match(/<div class="notification-list mt-8">([\s\S]*?)<\/section>/);
-  const chunk = mainMatch ? mainMatch[1] : html;
-  const re = /<div class="notification-item">[\s\S]*?<span class="day">(\d{1,2})<\/span>\s*<span class="month-year">(\d{1,2})\.(\d{4})<\/span>[\s\S]*?<h3 class="news-title">\s*<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  let chunk = html;
+  const start = html.indexOf('<div class="notification-list mt-8">');
+  if (start >= 0) {
+    const end = html.indexOf("</section>", start);
+    chunk = end > start ? html.slice(start, end) : html.slice(start);
+  }
+  const parts = chunk.split('<div class="notification-item">');
   const items = [];
   const seen = new Set();
-  let m;
-  while ((m = re.exec(chunk)) !== null) {
-    const day = m[1].padStart(2, "0");
-    const mo = m[2].padStart(2, "0");
-    const yr = m[3];
-    let href = decodeEntities(m[4]).trim();
+  for (let i = 1; i < parts.length; i++) {
+    const seg = parts[i];
+    const dm = DNN_NOTIF_DAY_RE.exec(seg);
+    if (!dm) continue;
+    const lm = DNN_LINK_RE.exec(seg);
+    if (!lm) continue;
+    let href = decodeEntities(lm[1]).trim();
     if (href.startsWith("/")) href = src.base + href;
-    const title = cleanText(m[5]);
-    const dt = parseDate(`${day}/${mo}/${yr}`);
     const id = extractDnnId(href);
-    if (title && dt && !seen.has(id)) {
+    if (seen.has(id)) continue;
+    const title = cleanText(lm[2]);
+    const dt = parseDate(`${dm[1].padStart(2, "0")}/${dm[2].padStart(2, "0")}/${dm[3]}`);
+    if (title && dt) {
       seen.add(id);
       items.push({
         id,
@@ -476,20 +543,28 @@ function parseDnnNotif(html, src) {
 function parseDnnNews(html, src) {
   let chunk = html;
   if (src.type !== "dnn_pdt_home") {
-    const mainMatch = html.match(/<div class="news-list mt-8">([\s\S]*?)<\/section>/);
-    if (mainMatch) chunk = mainMatch[1];
+    const start = html.indexOf('<div class="news-list mt-8">');
+    if (start >= 0) {
+      const end = html.indexOf("</section>", start);
+      chunk = end > start ? html.slice(start, end) : html.slice(start);
+    }
   }
-  const re = /<div class="news-item">[\s\S]*?<p class="news-date">(\d{1,2}\/\d{1,2}\/\d{4})<\/p>\s*<h3 class="news-title">\s*<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+  const parts = chunk.split('<div class="news-item">');
   const items = [];
   const seen = new Set();
-  let m;
-  while ((m = re.exec(chunk)) !== null) {
-    const dt = parseDate(m[1]);
-    let href = decodeEntities(m[2]).trim();
+  for (let i = 1; i < parts.length; i++) {
+    const seg = parts[i];
+    const dm = DNN_NEWS_DATE_RE.exec(seg);
+    if (!dm) continue;
+    const lm = DNN_LINK_RE.exec(seg);
+    if (!lm) continue;
+    let href = decodeEntities(lm[1]).trim();
     if (href.startsWith("/")) href = src.base + href;
-    const title = cleanText(m[3]);
     const id = extractDnnId(href);
-    if (title && dt && !seen.has(id)) {
+    if (seen.has(id)) continue;
+    const title = cleanText(lm[2]);
+    const dt = parseDate(dm[1]);
+    if (title && dt) {
       seen.add(id);
       let code = src.code;
       if (src.key === "daotao_news" && href.includes("/xet-tot-nghiep/")) code = "dtt";
@@ -505,36 +580,6 @@ function parseDnnNews(html, src) {
     }
   }
   return items;
-}
-
-async function saveOnlineLkg(env, items) {
-  if (!env || !env.SUBSCRIBERS_KV || !items || !items.length) return;
-  try {
-    const prev = await env.SUBSCRIBERS_KV.get("cache:online_lkg", { type: "json" }).catch(() => null);
-    const prevIds = prev && Array.isArray(prev.items) ? prev.items.map((x) => x.id).join(",") : "";
-    const curIds = items.slice(0, 20).map((x) => x.id).join(",");
-    const ageMs = prev && prev.savedAt ? Date.now() - prev.savedAt : 9e9;
-    if (prevIds !== curIds || ageMs > 15 * 60 * 1000) {
-      await env.SUBSCRIBERS_KV.put(
-        "cache:online_lkg",
-        JSON.stringify({ savedAt: Date.now(), items: items.slice(0, 20) })
-      );
-    }
-  } catch (_) {}
-}
-
-async function loadOnlineLkgEntry(env) {
-  if (!env || !env.SUBSCRIBERS_KV) return null;
-  try {
-    const prev = await env.SUBSCRIBERS_KV.get("cache:online_lkg", { type: "json" });
-    if (prev && Array.isArray(prev.items) && prev.items.length) return prev;
-  } catch (_) {}
-  return null;
-}
-
-async function loadOnlineLkg(env) {
-  const entry = await loadOnlineLkgEntry(env);
-  return entry ? entry.items : [];
 }
 
 async function putEdgeCache(cacheKey, data, ttlSec) {
@@ -565,39 +610,133 @@ async function getEdgeCache(cacheKey) {
   return null;
 }
 
+async function loadHubSnapshot(env) {
+  if (!env || !env.SUBSCRIBERS_KV) return null;
+  const edgeSnap = await getEdgeCache("kv_hub_snapshot_v1");
+  if (edgeSnap && edgeSnap.bySource) return edgeSnap;
+  try {
+    const snap = await env.SUBSCRIBERS_KV.get("cache:hub_snapshot_v1", { type: "json" });
+    if (snap && snap.bySource) {
+      await putEdgeCache("kv_hub_snapshot_v1", snap, 45);
+      return snap;
+    }
+    // Tương thích ngược với cache:online_lkg cũ nếu cron mới chưa chạy nhịp đầu
+    const legacy = await env.SUBSCRIBERS_KV.get("cache:online_lkg", { type: "json" }).catch(() => null);
+    if (legacy && Array.isArray(legacy.items) && legacy.items.length) {
+      return { savedAt: legacy.savedAt || 0, fetchedAt: vnNowLabel(), bySource: { online: legacy.items }, health: [] };
+    }
+  } catch (_) {}
+  return null;
+}
+
+async function isSnapshotWarm(env) {
+  const snap = await loadHubSnapshot(env);
+  if (!snap || !snap.savedAt) return false;
+  const age = Date.now() - snap.savedAt;
+  return age <= SNAPSHOT_SWR_MAX_AGE_MS && Object.keys(snap.bySource || {}).length >= 5;
+}
+
+function snapshotFingerprint(bySource) {
+  return SOURCES.map((s) => {
+    const arr = (bySource && bySource[s.key]) || [];
+    return `${s.key}:${arr.slice(0, 5).map((x) => x.id).join(",")}`;
+  }).join("|");
+}
+
+async function saveHubSnapshot(env, freshBySource, freshHealth, forceWrite = false) {
+  if (!env || !env.SUBSCRIBERS_KV) return;
+  try {
+    const prev = await env.SUBSCRIBERS_KV.get("cache:hub_snapshot_v1", { type: "json" }).catch(() => null);
+    const mergedBySource = {};
+    const mergedHealth = [];
+    const prevHealthMap = new Map(((prev && prev.health) || []).map((h) => [h.key, h]));
+
+    for (const s of SOURCES) {
+      const freshItems = (freshBySource && freshBySource[s.key]) || [];
+      const freshH = (freshHealth || []).find((h) => h.key === s.key);
+      if (freshItems.length > 0) {
+        mergedBySource[s.key] = freshItems.slice(0, 22);
+        mergedHealth.push(freshH || {
+          key: s.key,
+          ok: true,
+          fallback: false,
+          ms: 0,
+          count: freshItems.length,
+          latestDate: freshItems[0].date,
+          error: "",
+        });
+      } else if (prev && prev.bySource && Array.isArray(prev.bySource[s.key]) && prev.bySource[s.key].length) {
+        // Giữ nguyên dữ liệu LKG của từng cổng khi cổng đó tạm chậm/timeout
+        mergedBySource[s.key] = prev.bySource[s.key];
+        const ph = prevHealthMap.get(s.key);
+        mergedHealth.push({
+          key: s.key,
+          ok: true,
+          fallback: true,
+          ms: freshH ? freshH.ms : 0,
+          count: prev.bySource[s.key].length,
+          latestDate: prev.bySource[s.key][0].date || (ph && ph.latestDate) || "—",
+          error: "Bản đệm nhanh",
+        });
+      } else {
+        mergedBySource[s.key] = [];
+        mergedHealth.push(freshH || { key: s.key, ok: false, fallback: false, ms: 0, count: 0, latestDate: "—", error: "Chưa có dữ liệu" });
+      }
+    }
+
+    const prevFp = prev ? snapshotFingerprint(prev.bySource) : "";
+    const curFp = snapshotFingerprint(mergedBySource);
+    const ageMs = prev && prev.savedAt ? Date.now() - prev.savedAt : 9e9;
+    const snap = {
+      savedAt: Date.now(),
+      fetchedAt: vnNowLabel(),
+      bySource: mergedBySource,
+      health: mergedHealth,
+    };
+
+    await putEdgeCache("kv_hub_snapshot_v1", snap, 45);
+    // Chỉ ghi KV khi có tin mới đổi ID, ép ghi, hoặc quá 10 phút (~144 lượt ghi/ngày, <15% hạn mức miễn phí)
+    if (forceWrite || prevFp !== curFp || ageMs >= SNAPSHOT_WRITE_INTERVAL_MS) {
+      await env.SUBSCRIBERS_KV.put("cache:hub_snapshot_v1", JSON.stringify(snap));
+    }
+  } catch (e) {
+    log("saveHubSnapshot error", e);
+  }
+}
+
 async function fetchSource(src, onlinePages = 1, env = null, cronMode = false) {
   const t0 = Date.now();
   const isOnline = src.key === "online";
-  const timeoutMs = isOnline ? (cronMode ? 12000 : 5000) : 7500;
+  const timeoutMs = isOnline ? (cronMode ? 9000 : 4500) : (cronMode ? 6500 : 5000);
+  const retries = isOnline ? 2 : (cronMode ? 2 : 1);
   try {
-    // Ưu tiên #1 Online HUB: timeout nhanh (5s interactive / 12s cron) + retry luân phiên / và /Default.aspx
-    const first = await fetchHTML(src.url, null, "", timeoutMs, isOnline ? 2 : 1);
+    const first = await fetchHTML(src.url, null, "", timeoutMs, retries);
     let items = [];
     if (src.type === "asp_grid") {
       items = parseOnlineItems(first.html);
-      let fields = getHiddenFields(first.html);
-      for (let p = 2; p <= onlinePages && items.length; p++) {
-        try {
-          const next = await fetchHTML(
-            ONLINE_HOME,
-            Object.assign({}, fields, {
-              __EVENTTARGET: ONLINE_GRID_TARGET,
-              __EVENTARGUMENT: "Page$" + p,
-            }),
-            first.cookie,
-            5500,
-            1
-          );
-          fields = getHiddenFields(next.html);
-          const pItems = parseOnlineItems(next.html);
-          if (!pItems.length) break;
-          items = items.concat(pItems);
-        } catch (_) {
-          break;
+      // Bỏ qua giải mã __VIEWSTATE 50KB khi chỉ cần 1 trang (tiết kiệm mạnh CPU Worker!)
+      if (onlinePages > 1 && items.length) {
+        let fields = getHiddenFields(first.html);
+        for (let p = 2; p <= onlinePages; p++) {
+          try {
+            const next = await fetchHTML(
+              ONLINE_HOME,
+              Object.assign({}, fields, {
+                __EVENTTARGET: ONLINE_GRID_TARGET,
+                __EVENTARGUMENT: "Page$" + p,
+              }),
+              first.cookie,
+              5000,
+              1
+            );
+            fields = getHiddenFields(next.html);
+            const pItems = parseOnlineItems(next.html);
+            if (!pItems.length) break;
+            items = items.concat(pItems);
+          } catch (_) {
+            break;
+          }
         }
-      }
-      if (items.length && env) {
-        await saveOnlineLkg(env, items);
       }
     } else if (src.type === "dnn_notif") {
       items = parseDnnNotif(first.html, src);
@@ -607,9 +746,10 @@ async function fetchSource(src, onlinePages = 1, env = null, cronMode = false) {
     items.sort((a, b) => b.ts - a.ts);
     return { key: src.key, ok: true, ms: Date.now() - t0, items, fallback: false };
   } catch (e) {
-    if (isOnline && env) {
-      const lkg = await loadOnlineLkg(env);
-      if (lkg.length) {
+    if (env) {
+      const snap = await loadHubSnapshot(env);
+      const lkg = snap && snap.bySource && snap.bySource[src.key];
+      if (Array.isArray(lkg) && lkg.length) {
         return {
           key: src.key,
           ok: true,
@@ -624,89 +764,111 @@ async function fetchSource(src, onlinePages = 1, env = null, cronMode = false) {
   }
 }
 
-async function fetchAllSources(onlinePages = 1, bypassCache = false, env = null, ctx = null) {
-  const key = `all_sources_v3_p${onlinePages}`;
-  return await cachedJson(
-    key,
-    async () => {
-      const jobs = SOURCES.map(async (s) => {
-        if (s.key === "online" && onlinePages === 1 && !bypassCache && env) {
-          const lkg = await loadOnlineLkgEntry(env);
-          if (lkg && lkg.savedAt && (Date.now() - lkg.savedAt) <= ONLINE_SWR_MAX_AGE_MS) {
-            if (ctx && typeof ctx.waitUntil === "function") {
-              ctx.waitUntil(
-                fetchSource(s, 1, env, false)
-                  .then((r) => {
-                    if (r.ok && !r.fallback && r.items.length) {
-                      return putEdgeCache("src_v3_online_p1", r.items, ONLINE_CACHE_TTL_SEC);
-                    }
-                  })
-                  .catch(() => {})
-              );
-            }
-            return { key: "online", ok: true, ms: 20, items: lkg.items, fallback: false };
-          }
-        }
-        return fetchSource(s, s.key === "online" ? onlinePages : 1, env, false);
-      });
-      const resList = await Promise.all(jobs);
-      const bySource = {};
-      const health = [];
-      for (const r of resList) {
-        bySource[r.key] = r.items;
-        health.push({
-          key: r.key,
-          ok: r.ok,
-          fallback: Boolean(r.fallback),
-          ms: r.ms,
-          count: r.items.length,
-          latestDate: r.items[0] ? r.items[0].date : "—",
-          error: r.error || "",
-        });
-      }
-      return { bySource, health, fetchedAt: vnNowLabel() };
-    },
-    bypassCache,
-    CACHE_TTL_SEC
+async function refreshAllLive(onlinePages, env) {
+  const resList = await runPool(SOURCES, FETCH_CONCURRENCY, (s) =>
+    fetchSource(s, s.key === "online" ? onlinePages : 1, env, false)
   );
+  const bySource = {};
+  const health = [];
+  for (const r of resList) {
+    bySource[r.key] = r.items;
+    health.push({
+      key: r.key,
+      ok: r.ok,
+      fallback: Boolean(r.fallback),
+      ms: r.ms,
+      count: r.items.length,
+      latestDate: r.items[0] ? r.items[0].date : "—",
+      error: r.error || "",
+    });
+  }
+  const result = { bySource, health, fetchedAt: vnNowLabel() };
+  if (onlinePages === 1 && env) {
+    const freshLive = {};
+    for (const r of resList) {
+      if (r.ok && !r.fallback && r.items.length) freshLive[r.key] = r.items;
+    }
+    if (Object.keys(freshLive).length > 0) {
+      await saveHubSnapshot(env, freshLive, health, false);
+    }
+  }
+  return result;
+}
+
+async function fetchAllSources(onlinePages = 1, bypassCache = false, env = null, ctx = null) {
+  const key = `all_sources_v4_p${onlinePages}`;
+
+  // 1) Tầng nhanh nhất: Edge Cache -> Unified 7-Portal KV Snapshot (<50ms cho toàn bộ lệnh!)
+  if (!bypassCache) {
+    const edgeHit = await getEdgeCache(key);
+    if (edgeHit && edgeHit.bySource) return edgeHit;
+
+    if (onlinePages === 1 && env) {
+      const snap = await loadHubSnapshot(env);
+      const age = snap && snap.savedAt ? Date.now() - snap.savedAt : 9e9;
+      if (snap && age <= SNAPSHOT_SWR_MAX_AGE_MS && Object.keys(snap.bySource || {}).length >= 5) {
+        if (age >= SNAPSHOT_BG_REFRESH_MS && ctx && typeof ctx.waitUntil === "function") {
+          ctx.waitUntil(
+            refreshAllLive(1, env)
+              .then((fresh) => putEdgeCache(key, fresh, CACHE_TTL_SEC))
+              .catch(() => {})
+          );
+        }
+        return { bySource: snap.bySource, health: snap.health || [], fetchedAt: snap.fetchedAt || vnNowLabel() };
+      }
+    }
+  }
+
+  // 2) Tải trực tiếp với concurrency giới hạn 4 kết nối
+  const data = await refreshAllLive(onlinePages, env);
+  await putEdgeCache(key, data, CACHE_TTL_SEC);
+  return data;
 }
 
 async function fetchSingleSourceCached(sourceKey, onlinePages = 1, bypassCache = false, env = null, ctx = null) {
   const src = SOURCE_BY_KEY[sourceKey];
   if (!src) return [];
-  const key = `src_v3_${sourceKey}_p${onlinePages}`;
+  const key = `src_v4_${sourceKey}_p${onlinePages}`;
   const ttl = sourceKey === "online" ? ONLINE_CACHE_TTL_SEC : CACHE_TTL_SEC;
 
-  // Stale-While-Revalidate cho Online HUB: trả ngay từ Edge/KV (<50ms) và tự làm mới nền!
-  if (sourceKey === "online" && onlinePages === 1 && !bypassCache) {
+  if (onlinePages === 1 && !bypassCache) {
     const edgeHit = await getEdgeCache(key);
     if (edgeHit && edgeHit.length) return edgeHit;
-    const lkg = await loadOnlineLkgEntry(env);
-    if (lkg && lkg.savedAt && (Date.now() - lkg.savedAt) <= ONLINE_SWR_MAX_AGE_MS) {
-      if (ctx && typeof ctx.waitUntil === "function") {
+    const snap = await loadHubSnapshot(env);
+    const age = snap && snap.savedAt ? Date.now() - snap.savedAt : 9e9;
+    const snapItems = snap && snap.bySource && snap.bySource[sourceKey];
+    if (Array.isArray(snapItems) && snapItems.length && age <= SNAPSHOT_SWR_MAX_AGE_MS) {
+      if (age >= SNAPSHOT_BG_REFRESH_MS && ctx && typeof ctx.waitUntil === "function") {
         ctx.waitUntil(
           fetchSource(src, 1, env, false)
-            .then((r) => {
+            .then(async (r) => {
               if (r.ok && !r.fallback && r.items.length) {
-                return putEdgeCache(key, r.items, ONLINE_CACHE_TTL_SEC);
+                await putEdgeCache(key, r.items, ttl);
+                await saveHubSnapshot(env, { [sourceKey]: r.items }, [{
+                  key: sourceKey, ok: true, fallback: false, ms: r.ms,
+                  count: r.items.length, latestDate: r.items[0].date, error: "",
+                }], false);
               }
             })
             .catch(() => {})
         );
       }
-      return lkg.items;
+      return snapItems;
     }
   }
 
-  return await cachedJson(
-    key,
-    async () => {
-      const r = await fetchSource(src, onlinePages, env, false);
-      return r.items.sort((a, b) => b.ts - a.ts);
-    },
-    bypassCache,
-    ttl
-  );
+  const r = await fetchSource(src, onlinePages, env, false);
+  const sorted = r.items.sort((a, b) => b.ts - a.ts);
+  if (sorted.length) {
+    await putEdgeCache(key, sorted, ttl);
+    if (onlinePages === 1 && !r.fallback && env) {
+      await saveHubSnapshot(env, { [sourceKey]: sorted }, [{
+        key: sourceKey, ok: true, fallback: false, ms: r.ms,
+        count: sorted.length, latestDate: sorted[0].date, error: "",
+      }], false);
+    }
+  }
+  return sorted;
 }
 
 function mergeAndDedupe(bySource, days = null) {
@@ -779,9 +941,10 @@ async function fetchArticleDetailUncached(code, id) {
     const cookie = sc ? sc.split(";")[0].trim() : "";
     let dHtml = "";
     if (r1.status >= 300 && r1.status < 400) {
+      try { if (r1.body) await r1.body.cancel(); } catch (_) {}
       const loc = r1.headers.get("location") || ONLINE_HOME;
       const nextUrl = loc.startsWith("http") ? loc : new URL(loc, ONLINE_HOME).href;
-      const r2 = await fetchHTML(nextUrl, null, cookie, 6000, 1);
+      const r2 = await fetchHTML(nextUrl, null, cookie, 6500, 1);
       dHtml = r2.html;
     } else {
       dHtml = await r1.text();
@@ -1043,6 +1206,7 @@ async function trackSubscriber(env, chat, fromUser = null, forceActivate = false
         lastSeen: nowIso,
       };
       await env.SUBSCRIBERS_KV.put(key, JSON.stringify(updated));
+      await deleteEdgeCache("subscribers_list_v1");
       return updated;
     }
     const created = {
@@ -1056,6 +1220,7 @@ async function trackSubscriber(env, chat, fromUser = null, forceActivate = false
       lastSeen: nowIso,
     };
     await env.SUBSCRIBERS_KV.put(key, JSON.stringify(created));
+    await deleteEdgeCache("subscribers_list_v1");
     return created;
   } catch (e) {
     log("trackSubscriber error", e);
@@ -1081,6 +1246,7 @@ async function setUserSubscription(env, chatId, subscribed, blocked = false) {
       lastSeen: new Date().toISOString(),
     };
     await env.SUBSCRIBERS_KV.put(key, JSON.stringify(updated));
+    await deleteEdgeCache("subscribers_list_v1");
     return updated;
   } catch (e) {
     log("setUserSubscription error", e);
@@ -1088,27 +1254,34 @@ async function setUserSubscription(env, chatId, subscribed, blocked = false) {
   }
 }
 
-async function listAllSubscribers(env) {
+async function listAllSubscribers(env, bypassCache = false) {
   if (!env || !env.SUBSCRIBERS_KV) return [];
-  const keys = [];
-  let cursor = undefined;
-  for (let guard = 0; guard < 20; guard++) {
-    const res = await env.SUBSCRIBERS_KV.list({ prefix: "u:", cursor });
-    for (const k of (res.keys || [])) keys.push(k.name);
-    if (res.list_complete || !res.cursor) break;
-    cursor = res.cursor;
-  }
-  const users = [];
-  for (let i = 0; i < keys.length; i += 25) {
-    const batch = await Promise.all(
-      keys.slice(i, i + 25).map((k) => env.SUBSCRIBERS_KV.get(k, { type: "json" }).catch(() => null))
-    );
-    for (const u of batch) {
-      if (u && u.id) users.push(u);
-    }
-  }
-  users.sort((a, b) => String(b.joinedAt || "").localeCompare(String(a.joinedAt || "")));
-  return users;
+  return await cachedJson(
+    "subscribers_list_v1",
+    async () => {
+      const keys = [];
+      let cursor = undefined;
+      for (let guard = 0; guard < 20; guard++) {
+        const res = await env.SUBSCRIBERS_KV.list({ prefix: "u:", cursor });
+        for (const k of (res.keys || [])) keys.push(k.name);
+        if (res.list_complete || !res.cursor) break;
+        cursor = res.cursor;
+      }
+      const users = [];
+      for (let i = 0; i < keys.length; i += 25) {
+        const batch = await Promise.all(
+          keys.slice(i, i + 25).map((k) => env.SUBSCRIBERS_KV.get(k, { type: "json" }).catch(() => null))
+        );
+        for (const u of batch) {
+          if (u && u.id) users.push(u);
+        }
+      }
+      users.sort((a, b) => String(b.joinedAt || "").localeCompare(String(a.joinedAt || "")));
+      return users;
+    },
+    bypassCache,
+    SUBSCRIBERS_CACHE_TTL_SEC
+  );
 }
 
 function formatBroadcastPayload(bodyText, urgent = false) {
@@ -1164,25 +1337,29 @@ async function executeBroadcast(env, draft) {
 }
 
 async function adminHomeView(env, adminId) {
-  const users = await listAllSubscribers(env);
+  const users = await listAllSubscribers(env, true);
   const active = users.filter((u) => u.subscribed !== false && !u.blocked).length;
   const muted = users.length - active;
   const lastScan = env.SUBSCRIBERS_KV
     ? await env.SUBSCRIBERS_KV.get("state:last_scan", { type: "json" }).catch(() => null)
     : null;
+  const scanMs = lastScan && lastScan.ms ? ` · ${lastScan.ms}ms` : "";
   const scanLine = lastScan
-    ? `⚡ Tự động 5p: ${lastScan.okCount}/${lastScan.totalSources} cổng (<code>${lastScan.at}</code>)`
+    ? `⚡ Tự động 5p: ${lastScan.okCount}/${lastScan.totalSources} cổng (<code>${lastScan.at}</code>${scanMs})`
     : "⚡ Tự động 5p: Cloudflare Cron";
 
-  const text = [
+  const textLines = [
     "<b>Quản trị · HUB Monitor</b>",
     LINE,
     `👤 ${AUTHOR_NAME} · <code>${escapeHtml(adminId)}</code>`,
     `👥 Người dùng: <b>${users.length}</b> (🔔 ${active} · 🔕 ${muted})`,
     scanLine,
-    "",
-    "Lệnh nhanh: <code>/bc nội dung</code> · <code>/bc! gửi ngay</code>",
-  ].join("\n");
+  ];
+  if (lastScan && Array.isArray(lastScan.failed) && lastScan.failed.length) {
+    textLines.push(`⚠️ Chậm/Lỗi: <code>${escapeHtml(lastScan.failed.slice(0, 3).join(", "))}</code>`);
+  }
+  textLines.push("", "Lệnh nhanh: <code>/bc nội dung</code> · <code>/bc! gửi ngay</code>");
+  const text = textLines.join("\n");
 
   const markup = {
     inline_keyboard: [
@@ -1207,8 +1384,9 @@ async function adminHomeView(env, adminId) {
 // ---------------------------------------------------------------- Real-time 5-Minute Auto-Scanner (Cloudflare Cron)
 
 function buildAutoPushCard(item, extraSources = [], detail = null) {
-  const cat = classifyItem(item.title, item.source);
-  const urgent = isUrgentTitle(item.title);
+  const norm = stripAccents(item.title).toLowerCase();
+  const cat = classifyItem(item.title, item.source, norm);
+  const urgent = isUrgentTitle(item.title, norm);
   const src = SOURCE_BY_KEY[item.source] || { emoji: "🏛️", name: item.source, short: item.source };
   const headIcon = urgent ? "🚨" : cat.icon;
 
@@ -1281,22 +1459,36 @@ async function runAutoMonitorCron(env, forceRecordScan = false) {
     return { ok: false, reason: "Missing BOT_TOKEN or SUBSCRIBERS_KV" };
   }
 
-  // Quét song song 7 cổng HUB (Online HUB #1; chế độ cron cho phép chờ 8.5s và không dùng LKG fallback)
-  const jobs = SOURCES.map((s) => fetchSource(s, 1, null, true));
-  const resList = await Promise.all(jobs);
+  const t0 = Date.now();
+  // Giới hạn tối đa 4 kết nối song song (tránh vượt ngưỡng 6 socket của Cloudflare Workers & tránh nghẽn WAF trường)
+  const resList = await runPool(SOURCES, FETCH_CONCURRENCY, (s) => fetchSource(s, 1, null, true));
 
   const bySource = {};
+  const health = [];
+  const failed = [];
   let okCount = 0;
   let onlineOk = false;
   for (const r of resList) {
     bySource[r.key] = r.items;
+    health.push({
+      key: r.key,
+      ok: r.ok,
+      fallback: false,
+      ms: r.ms,
+      count: r.items.length,
+      latestDate: r.items[0] ? r.items[0].date : "—",
+      error: r.error || "",
+    });
     if (r.ok && r.items.length > 0) {
       okCount += 1;
-      if (r.key === "online") {
-        onlineOk = true;
-        await saveOnlineLkg(env, r.items);
-      }
+      if (r.key === "online") onlineOk = true;
+    } else {
+      failed.push(`${r.key}:${String(r.error || "empty").slice(0, 18)}`);
     }
+  }
+
+  if (okCount > 0) {
+    await saveHubSnapshot(env, bySource, health, forceRecordScan);
   }
 
   const prevState = (await env.SUBSCRIBERS_KV.get("state:seen_v1", { type: "json" }).catch(() => null)) || {
@@ -1419,35 +1611,39 @@ async function runAutoMonitorCron(env, forceRecordScan = false) {
   if (stateChanged) {
     for (const sk of Object.keys(sourcesState)) {
       const entries = Object.entries(sourcesState[sk]);
-      if (entries.length > 150) {
+      if (entries.length > 120) {
         entries.sort((a, b) => {
           const da = parseDate(a[1]);
           const db = parseDate(b[1]);
           return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
         });
-        sourcesState[sk] = Object.fromEntries(entries.slice(0, 150));
+        sourcesState[sk] = Object.fromEntries(entries.slice(0, 120));
       }
     }
     await env.SUBSCRIBERS_KV.put("state:seen_v1", JSON.stringify({ sources: sourcesState, seenTitles }));
   }
 
+  const scanMs = Date.now() - t0;
   const prevScan = await env.SUBSCRIBERS_KV.get("state:last_scan", { type: "json" }).catch(() => null);
   const scanAgeMs = prevScan && prevScan.ts ? Date.now() - prevScan.ts : 9e9;
-  if (forceRecordScan || pushedNotices > 0 || scanAgeMs > 30 * 60 * 1000) {
+  const healthChanged = !prevScan || prevScan.okCount !== okCount || prevScan.onlineOk !== onlineOk;
+  if (forceRecordScan || pushedNotices > 0 || healthChanged || scanAgeMs > 30 * 60 * 1000) {
     await env.SUBSCRIBERS_KV.put(
       "state:last_scan",
       JSON.stringify({
         ts: Date.now(),
         at: vnNowLabel(),
+        ms: scanMs,
         okCount,
         totalSources: SOURCES.length,
         onlineOk,
         pushedNotices,
+        failed: failed.slice(0, 4),
       })
     );
   }
 
-  return { ok: true, okCount, totalSources: SOURCES.length, onlineOk, pushedNotices, totalDelivered };
+  return { ok: true, ms: scanMs, okCount, totalSources: SOURCES.length, onlineOk, pushedNotices, totalDelivered, failed };
 }
 
 async function adminUsersView(env, page = 1) {
@@ -1770,8 +1966,9 @@ function buildPaginatedListView(title, items, page, baseCbPrefix, extra = {}) {
     slice.forEach((it, idx) => {
       const num = start + idx + 1;
       const src = SOURCE_BY_KEY[it.source] || { emoji: "📌", short: it.source };
-      const cat = classifyItem(it.title, it.source);
-      const icon = isUrgentTitle(it.title) ? "🚨" : cat.icon;
+      const norm = stripAccents(it.title).toLowerCase();
+      const cat = classifyItem(it.title, it.source, norm);
+      const icon = isUrgentTitle(it.title, norm) ? "🚨" : cat.icon;
       const shortTitle = it.title.length > 100 ? it.title.slice(0, 97) + "..." : it.title;
       const also = it.alsoIn && it.alsoIn.length ? ` · +${it.alsoIn.length}` : "";
 
@@ -1829,8 +2026,9 @@ function buildPaginatedListView(title, items, page, baseCbPrefix, extra = {}) {
 }
 
 function buildDetailView(detail, backCb = "m:home") {
-  const cat = classifyItem(detail.title, detail.source);
-  const urgent = isUrgentTitle(detail.title);
+  const norm = stripAccents(detail.title).toLowerCase();
+  const cat = classifyItem(detail.title, detail.source, norm);
+  const urgent = isUrgentTitle(detail.title, norm);
   const icon = urgent ? "🚨" : cat.icon;
 
   const lines = [
@@ -2274,9 +2472,12 @@ async function handleMessage(msg, env, ctx = null) {
   if (cmd === "/online") {
     route = "src:online:1";
     loadingText = "🏛️ Đang tải Online HUB...";
-  } else if (cmd === "/latest" || cmd === "/update") {
-    route = "rf:list:all:latest:1";
+  } else if (cmd === "/latest") {
+    route = "list:all:latest:1";
     loadingText = "⚡ Đang tải tin mới nhất...";
+  } else if (cmd === "/update") {
+    route = "rf:list:all:latest:1";
+    loadingText = "⚡ Đang cập nhật trực tiếp 7 cổng HUB...";
   } else if (cmd === "/full7d") {
     route = "list:all:7:1";
     loadingText = "📅 Đang tải tin 7 ngày...";
@@ -2320,8 +2521,13 @@ async function handleMessage(msg, env, ctx = null) {
     return;
   }
 
-  const sent = await sendMsg(env, chatId, loadingText);
-  const msgId = sent && sent.result && sent.result.message_id;
+  // Tuyến đọc nhanh qua Snapshot/Edge Cache gửi thẳng trong 1 lệnh Telegram (không nhấp nháy loading)
+  const needsLoading = route.startsWith("rf:") || route === "list:all:30:1" || !(await isSnapshotWarm(env));
+  let msgId = null;
+  if (needsLoading) {
+    const sent = await sendMsg(env, chatId, loadingText);
+    msgId = sent && sent.result && sent.result.message_id;
+  }
 
   try {
     const view = await renderRoute(route, false, env, ctx);
@@ -2467,15 +2673,18 @@ async function handleCallback(cb, env, ctx = null) {
       await answerCb(env, cb.id, "Đang quét 7 cổng HUB...");
       await editMsg(env, chatId, messageId, "⏳ Đang quét 7 cổng HUB (ưu tiên Online HUB #1)...");
       const res = await runAutoMonitorCron(env, true);
-      const msgReport = [
+      const reportLines = [
         "✅ <b>Quét hoàn tất</b>",
         LINE,
         `Online HUB (#1): ${res.onlineOk ? "🟢 Trực tuyến" : "🟡 Tạm chậm"}`,
-        `Phản hồi: <b>${res.okCount}/${res.totalSources}</b> cổng`,
+        `Phản hồi: <b>${res.okCount}/${res.totalSources}</b> cổng · <code>${res.ms || 0}ms</code>`,
         `Tin mới đẩy: <b>${res.pushedNotices}</b> (${res.totalDelivered} lượt gửi)`,
-        `<code>${vnNowLabel()}</code>`,
-      ].join("\n");
-      await editMsg(env, chatId, messageId, msgReport, {
+      ];
+      if (res.failed && res.failed.length) {
+        reportLines.push(`⚠️ Chậm/Lỗi: <code>${escapeHtml(res.failed.slice(0, 3).join(", "))}</code>`);
+      }
+      reportLines.push(`<code>${vnNowLabel()}</code>`);
+      await editMsg(env, chatId, messageId, reportLines.join("\n"), {
         inline_keyboard: [[{ text: "⬅️ Admin", callback_data: "adm:home" }]],
       });
       return;
